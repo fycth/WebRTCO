@@ -1,0 +1,6 @@
+bin/*.jar
+deployment/*.js
+deps/
+apps/*/ebin/
+log/*.log
+bin/
