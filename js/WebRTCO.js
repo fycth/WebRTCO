@@ -432,16 +432,6 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
                     to.mozSrcObject = from.mozSrcObject;
                     to.play();
                 };
-
-            MediaStream.prototype.getVideoTracks =
-                function() {
-                    return [];
-                };
-
-            MediaStream.prototype.getAudioTracks =
-                function() {
-                    return [];
-                };
             return true;
         } else if (navigator.webkitGetUserMedia) {
             webrtcDetectedBrowser = "chrome";
