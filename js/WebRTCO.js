@@ -31,6 +31,14 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
         _sc.muteMic(mute);
     };
 
+    this.API_isCamMuted = function() {
+        return _sc.isCamMuted();
+    };
+
+    this.API_muteCam = function(mute) {
+        _sc.muteCam(mute);
+    };
+
     window.onbeforeunload = function() {
         _sc.sendByeMessage();
     };
@@ -139,6 +147,18 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
         this.isMicMuted = function() {
             var audiotracks = localStream.getAudioTracks();
             return !(audiotracks[0].enabled);
+        };
+
+        this.muteCam = function(mute) {
+            var videotracks = localStream.getVideoTracks();
+            for (var i = 0, l = videotracks.length; i < l; i++) {
+                videotracks[i].enabled = !mute;
+            };
+        };
+
+        this.isCamMuted = function() {
+            var videotracks = localStream.getVideoTracks();
+            return !(videotracks[0].enabled);
         };
 
         var onChannelOpened = function() {
