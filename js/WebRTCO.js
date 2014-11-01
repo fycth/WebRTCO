@@ -23,6 +23,14 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
         _sc.sendPublicChatMessage(msg);
     };
 
+    this.API_isMicMuted = function() {
+        return _sc.isMicMuted();
+    };
+
+    this.API_muteMic = function(mute) {
+        _sc.muteMic(mute);
+    };
+
     window.onbeforeunload = function() {
         _sc.sendByeMessage();
     };
@@ -120,6 +128,18 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
         var callback_onRoomRecv = onRoom;
         var callback_getRemoteVideo = getRem;
         var callback_onBye = onBye;
+
+        this.muteMic = function(mute) {
+            var audiotracks = localStream.getAudioTracks();
+            for (var i = 0, l = audiotracks.length; i < l; i++) {
+                audiotracks[i].enabled = !mute;
+            };
+        };
+
+        this.isMicMuted = function() {
+            var audiotracks = localStream.getAudioTracks();
+            return !(audiotracks[0].enabled);
+        };
 
         var onChannelOpened = function() {
             clog('Channel opened...');
