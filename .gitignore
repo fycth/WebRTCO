@@ -4,3 +4,4 @@ deps/
 apps/*/ebin/
 log/*.log*
 bin/
+version.tag
