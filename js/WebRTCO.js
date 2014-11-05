@@ -3,7 +3,8 @@
  * OSLIKAS http://www.oslikas.com
  */
 
-var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye) {
+var WebRTCO = function(options) {
+
     // <WebRTC Adapter>
     var RTCPeerConnection = null;
     var getUserMedia = null;
@@ -18,6 +19,10 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
 
     var _sc = null;
     var _media = null;
+
+    this.API_getRoomID = function() {
+        return _sc.getRoomID();
+    };
 
     this.API_sendPutChatMsg = function(msg) {
         _sc.sendPublicChatMessage(msg);
@@ -125,17 +130,22 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
     /*
      Signalling Connection object
      */
-    var WebRTCO_SC = function(signallingURL,onRoom,onChat,getRem,onBye) {
+    var WebRTCO_SC = function(options) {
         var channelReady;
         var channel;
         var localStream = null;
         var peers = {};
         var myPID = null;
+        var roomID = options.roomID || "room";
 
-        var callback_onPubChatMsgRecv = onChat;
-        var callback_onRoomRecv = onRoom;
-        var callback_getRemoteVideo = getRem;
-        var callback_onBye = onBye;
+        var callback_onPubChatMsgRecv = options.onMessageReceived;
+        var callback_onRoomRecv = options.onRoomReceived;
+        var callback_getRemoteVideo = options.onRemoteVideoReceived;
+        var callback_onBye = options.onBye;
+
+	this.getRoomID = function() {
+	    return roomID;
+	};
 
         this.muteMic = function(mute) {
             var audiotracks = localStream.getAudioTracks();
@@ -161,12 +171,23 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
             return !(videotracks[0].enabled);
         };
 
+	var parseLocation = function() {
+	    var s = window.location.search;
+	    var o = {};
+	    s.replace(
+		new RegExp ("([^?=&]+)(=([^&]*))?", "g"),
+		function ($0, $1, $2, $3) { o[$1] = $3; }
+	    );
+	    return o;
+	};
+
         var onChannelOpened = function() {
             clog('Channel opened...');
             channelReady = true;
 
-            if(location.search.substring(1,5) == "room") {
-                room = location.search.substring(6);
+	    var o = parseLocation();
+            if(o[roomID]) {
+                room = o[roomID];
                 sendMessage({"type" : "ROOM_ENTER", "value" : room * 1});
                 initiator = true;
             } else {
@@ -261,7 +282,7 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
         this.go = function(ls) {
             localStream = ls;
         channelReady = false;
-        channel = new WebSocket(signallingURL);
+        channel = new WebSocket(options.signalingURL);
         channel.onopen = onChannelOpened;
         channel.onerror = onChannelError;
         channel.onmessage = onChannelMessage;
@@ -515,8 +536,8 @@ var WebRTCO = function(signallingURL, localVideo, onRoom, onChat, getRem, onBye)
 
     initWebRTCAdapter();
 
-    _sc = new WebRTCO_SC(signallingURL,onRoom,onChat,getRem,onBye);
-    _media = new WebRTCO_Media(localVideo, _sc.go);
+    _sc = new WebRTCO_SC(options);
+    _media = new WebRTCO_Media(options.localVideo, _sc.go);
 
 };
 
