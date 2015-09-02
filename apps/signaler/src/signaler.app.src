@@ -1,19 +1,9 @@
 {application, signaler,
  [
-  {description, ""},
+  {description, "WebRTCO Signaler Backend"},
   {vsn, "1"},
   {registered, []},
-  {applications, [
-                  kernel,
-                  stdlib,
-                  cowlib,
-                  cowboy,
-                  compiler,
-                  syntax_tools,
-                  goldrush,
-                  lager,
-                  gproc
-                 ]},
-  {mod, { signaler_app, []}},
+  {applications, [kernel, stdlib, n2o]},
+  {mod, { web_app, []}},
   {env, []}
  ]}.

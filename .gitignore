@@ -1,7 +1,9 @@
+.DC_Store
+.applist
 bin/*.jar
-deployment/*.js
-deps/
+deployment
+deps
 apps/*/ebin/
-log/*.log*
-bin/
+bin
 version.tag
+tmp

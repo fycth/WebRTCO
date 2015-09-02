@@ -1,543 +1,424 @@
-/**
- * User: Andrey Sergienko
- * OSLIKAS http://www.oslikas.com
- */
+
+// Description: 
+// Author: Andrii Sergiienko
+// Created: Sun Apr  5 15:15:20 2015 (+0300)
+// Version: 1.9-beta
+
+/*
+   options.localVideoID = string ID of the video tag for showing local video
+   options.remoteVideoID = string ID of the video tag for showing remote video 
+   options.getRemoteVideoID = call back function which is called when we need to get remote video tag ID from the client
+   options.roomID = string word that identifies room parameter in the GET request. If not set, equal to 'room'
+   options.roomName = string that that identifies room name. If not set, room name will be requested from the signaling server
+   options.pc_config
+   options.constraints
+   options.sdp_constraints
+   options.sandbox = if set, don't make calls, just get user media and stop
+   options.own_signaler = URL to the WebRTCO signaler installed on the customer's side
+   options.call_back = it is a function that will be called when we need to notify client on an event (error happened, created room etc.)
+*/
 
 var WebRTCO = function(options) {
-
-    // <WebRTC Adapter>
-    var RTCPeerConnection = null;
-    var getUserMedia = null;
-    var attachMediaStream = null;
-    var reattachMediaStream = null;
-    var webrtcDetectedBrowser = null;
-    //  </WebRTC Adapter>
-
-    var debug = false;
-    var room = null;
-    var initiator;
-
-    var _sc = null;
-    var _media = null;
-
-    this.API_getRoomID = function() {
-        return _sc.getRoomID();
+    var API = {};
+    var signaling_url = typeof options.own_signaler !== 'undefined' ? options.own_signaler : "wss://www.oslikas.com/WebRTCO-app/signaling/1.9/";
+    if (typeof options === 'undefined') {
+	    console.error("You should pass options. Please, refer to the documentation.");
+	    return;
+    }
+    // we store in here set of PeerConnection objects (one per peer)
+    var Peers = [];
+    // we use basic default contraints when custom constraints are not provided
+    var default_constraints = {
+        audio: {
+            mandatory: {
+            },
+            optional: []
+        },
+	    video: {
+	        mandatory: {
+                minWidth: 640,
+                minHeight: 480,
+                maxWidth: 1080,
+                maxHeight: 720
+            },
+	        optional: []
+	    }
+    };
+    var default_pc_config = {
+	    iceServers: [
+	        {url: 'stun:stun1.l.google.com:19302'},
+	        {url: 'stun:srun2.l.google.com:19302'},
+	        {url: 'stun:stun.l.google.com:19302'}
+	    ]
+    };
+    var default_sdp_constraints = {
+        mandatory: {
+            OfferToReceiveAudio: true,
+            OfferToReceiveVideo: true
+        },
+        optional: []
     };
 
-    this.API_sendPutChatMsg = function(msg) {
-        _sc.sendPublicChatMessage(msg);
+    /* Look at the options and do initialization */
+    var pc_config = typeof options.pc_config !== 'undefined' ? options.pc_config : default_pc_config;
+    var constraints = typeof options.constraints !== 'undefined' ? options.constraints : default_constraints;
+    var sdpConstraints = typeof options.sdp_constraints !== 'undefined' ? options.sdp_constraints : default_sdp_constraints;
+    var localStream = null;
+    var roomID = typeof options.roomID !== 'undefined' ? options.roomID : 'room';
+    var sandbox = typeof options.sandbox !== 'undefined' ? true : false;
+    var call_back = typeof options.call_back !== 'undefined' ? options.call_back : undefined;
+
+    function getRemoteVideo() {
+        if (typeof options.remoteVideoID !== 'undefined') return options.remoteVideoID;
+        if (typeof options.getRemoteVideoID !== 'undefined') return options.getRemoteVideoID();
+        pushCallBack(ErrorCodes.REMOTE_ID);
+        return null;
+    }
+    
+    /*
+     * Error codes and call back
+     */
+    var ErrorCodes = {
+        // New room created, got the room URL
+        ENTERED_ROOM: 100,
+        // Unknown error
+        UNKNOWN: 10001,
+        // Can't create peer connection
+        PEER_CONNECTION: 1002,
+        // Can't access user media
+        MEDIA: 1003,
+        // Can't reach signaling server
+        SIGNALING: 1004,
+        // Room is full
+        ROOM_IS_FULL: 1005,
+        // Remote Video ID is not defined
+        REMOTE_ID: 1006
     };
+    API.ErrorCodes = ErrorCodes;
 
-    this.API_isMicMuted = function() {
-        return _sc.isMicMuted();
+    function pushCallback(code, message) {
+        if (undefined === call_back) return;
+        var msg = {code: code};
+        if (typeof message !== undefined) msg.message = message;
+        call_back(msg);
     };
+    /* end of ErrorCodes */
+    
+    /*
+     * Utilities
+     */    
+    var Utils = (function() {
+	    var API = {};	    
+	    API.getRoomName = function() {
+	        var s = window.location.search;
+	        var o = {};
+	        s.replace(
+		        new RegExp ("([^?=&]+)(=([^&]*))?", "g"),
+		        function ($0, $1, $2, $3) { o[$1] = $3; }
+	        );
+	        if (o[roomID]) return o[roomID];
+            return undefined;
+	    };
+        API.makeRandID = function(limit) {
+            var rand_text = "";
+            var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            for(var i = 0; i < limit; i++)
+                rand_text += possible.charAt(Math.floor(Math.random() * possible.length));
+	        return rand_text;
+        }
+	    return API;
+    }());
+    /* end of Utils object */
 
-    this.API_muteMic = function(mute) {
-        _sc.muteMic(mute);
-    };
-
-    this.API_isCamMuted = function() {
-        return _sc.isCamMuted();
-    };
-
-    this.API_muteCam = function(mute) {
-        _sc.muteCam(mute);
-    };
-
-    window.onbeforeunload = function() {
-        _sc.sendByeMessage();
-    };
-
-    var sdpConstraints = {'mandatory': {'OfferToReceiveAudio':true, 'OfferToReceiveVideo':true }};
-
-    var clog = function(str) {
-        if (debug) { window.console.log(str); }
-    };
-
-    this.setDebug = function(b) {
-        debug = b;
-    };
-
-//    var mergeConstraints = function(cons1, cons2) {
-//        var merged = cons1;
-//        for (var name in cons2.mandatory) merged.mandatory[name] = cons2.mandatory[name];
-//        merged.optional.concat(cons2.optional);
-//        return merged;
-//    };
-
-    // SDP stuff
-    /**
+    /*
+     * Peer Connection object
      *
-     * @param sdp
-     * @returns {*}
+     *
      */
-    var preferOpus = function(sdp) {
-        var sdpLines = sdp.split('\r\n');
+    var PeerConnection = function(remoteVideoID) {
+        var API = {};
+        var remoteVideo = document.getElementById(remoteVideoID);
+	    var pc_constraints = {};
+        var peer;
+        API.setPeer = function(p) {
+            peer = p;
+        };
+	    function onIceCandidate(e) {
+	        if (e.candidate) send2peer({type: 'candidate', label: e.candidate.sdpMLineIndex,
+					                   id: e.candidate.sdpMid, candidate: e.candidate.candidate});
+//	        else console.debug("End of candidates");
+	    };
 
-        for (var i = 0; i < sdpLines.length; i++) {
-            if (sdpLines[i].search('m=audio') !== -1) {
-                var mLineIndex = i;
-                break;
-            }
+        function send2peer(message) {
+            Signaling.Send({type: 'TO', value: peer, message: message});
         }
 
-        if (mLineIndex === null) return sdp;
+	    var onRemoteStreamAdded = function(e) {
+	        //TODO: calling of attachstream should be in media object (a callback?)	        
+	        attachMediaStream(remoteVideo, e.stream);
+//	        console.debug("Remote stream added");
+	    };
 
-        for (i = 0; i < sdpLines.length; i++) {
-            if (sdpLines[i].search('opus/48000') !== -1) {
-                var opusPayload = extractSdp(sdpLines[i], /:(\d+) opus\/48000/i);
-                if (opusPayload) sdpLines[mLineIndex] = setDefaultCodec(sdpLines[mLineIndex], opusPayload);
-                break;
-            }
+	    function onRemoteStreamRemoved(e) {
+//	        console.debug("Remote stream removed");
+	    };
+
+	    API.doCall = function() {
+//	        console.debug("Sending offer to the peer. Constraints: " + JSON.stringify(pc_constraints));
+	        pc.createOffer(setLocalAndSendMessage, onError, pc_constraints);
+	    };
+
+	    function doAnswer() {
+//	        console.debug("Sending answer to the peer");
+	        pc.createAnswer(setLocalAndSendMessage, onError, sdpConstraints); //TODO: sdpConstraints should be passed here?
+	    };
+
+	    function onError(e) {
+            pushCallback(ErrorCodes.PEER_CONNECTION, e.toString());
+//	        console.debug("Something happened when sending an answer or an offer: " + e.toString());
+	    };
+	    
+	    function setLocalAndSendMessage(sdp) {
+	        pc.setLocalDescription(sdp);
+	        send2peer(sdp);
+	    };
+
+	    API.onOffer = function(m) {
+	        pc.setRemoteDescription(new RTCSessionDescription(m));
+	        doAnswer();
+	    };
+
+	    API.onAnswer = function(m) {
+	        pc.setRemoteDescription(new RTCSessionDescription(m));
+	    };
+
+	    API.onCandidate = function(m) {
+	        var candidate = new RTCIceCandidate({sdpMLineIndex: m.label, candidate: m.candidate});
+	        pc.addIceCandidate(candidate);
+	    };
+
+        API.addStream = function(stream) {
+            pc.addStream(stream);
         }
 
-        sdpLines = removeCN(sdpLines, mLineIndex);
-
-        sdp = sdpLines.join('\r\n');
-        return sdp;
-    };
-
-    var extractSdp = function(sdpLine, pattern) {
-        var result = sdpLine.match(pattern);
-        return (result && result.length == 2)? result[1]: null;
-    };
-
-    var setDefaultCodec = function(mLine, payload) {
-        var elements = mLine.split(' ');
-        var newLine = new Array();
-        var index = 0;
-        for (var i = 0; i < elements.length; i++) {
-            if (index === 3) newLine[index++] = payload;
-            if (elements[i] !== payload) newLine[index++] = elements[i];
-        }
-        return newLine.join(' ');
-    };
-
-    var removeCN = function(sdpLines, mLineIndex) {
-        var mLineElements = sdpLines[mLineIndex].split(' ');
-        for (var i = sdpLines.length-1; i >= 0; i--) {
-            var payload = extractSdp(sdpLines[i], /a=rtpmap:(\d+) CN\/\d+/i);
-            if (payload) {
-                var cnPos = mLineElements.indexOf(payload);
-                if (cnPos !== -1) mLineElements.splice(cnPos, 1);
-                sdpLines.splice(i, 1);
-            }
-        }
-        sdpLines[mLineIndex] = mLineElements.join(' ');
-        return sdpLines;
-    };
-
-    /*
-     Signalling Connection object
-     */
-    var WebRTCO_SC = function(options) {
-        var channelReady;
-        var channel;
-        var localStream = null;
-        var peers = {};
-        var myPID = null;
-        var roomID = options.roomID || "room";
-
-        var callback_onPubChatMsgRecv = options.onMessageReceived;
-        var callback_onRoomRecv = options.onRoomReceived;
-        var callback_getRemoteVideo = options.onRemoteVideoReceived;
-        var callback_onBye = options.onBye;
-
-	this.getRoomID = function() {
-	    return roomID;
-	};
-
-        this.muteMic = function(mute) {
-            var audiotracks = localStream.getAudioTracks();
-            for (var i = 0, l = audiotracks.length; i < l; i++) {
-                audiotracks[i].enabled = !mute;
-            };
-        };
-
-        this.isMicMuted = function() {
-            var audiotracks = localStream.getAudioTracks();
-            return !(audiotracks[0].enabled);
-        };
-
-        this.muteCam = function(mute) {
-            var videotracks = localStream.getVideoTracks();
-            for (var i = 0, l = videotracks.length; i < l; i++) {
-                videotracks[i].enabled = !mute;
-            };
-        };
-
-        this.isCamMuted = function() {
-            var videotracks = localStream.getVideoTracks();
-            return !(videotracks[0].enabled);
-        };
-
-	var parseLocation = function() {
-	    var s = window.location.search;
-	    var o = {};
-	    s.replace(
-		new RegExp ("([^?=&]+)(=([^&]*))?", "g"),
-		function ($0, $1, $2, $3) { o[$1] = $3; }
-	    );
-	    return o;
-	};
-
-        var onChannelOpened = function() {
-            clog('Channel opened...');
-            channelReady = true;
-
-	    var o = parseLocation();
-            if(o[roomID]) {
-                room = o[roomID];
-                sendMessage({"type" : "ROOM_ENTER", "value" : room * 1});
-                initiator = true;
-            } else {
-                sendMessage({"type" : "ROOM_CREATE", "value" : ""});
-                initiator = false;
-            }
-//        doGetUserMedia();
-        };
-
-        var onChannelMessage = function(message) {
-            clog('S->C: ' + message.data);
-            processSignalingMessage(message.data);
-        };
-
-        var onChannelError = function() {
-            clog('Channel error.');
-        };
-
-        var onChannelClosed = function() {
-            clog('Channel closed.');
-            channelReady = false;
-        };
-
-        this.sendByeMessage = function() {
-            sendMessage({type: 'bye', from: myPID});
-        };
-
-        var sendMessage = function(message) {
-            if (!channelReady) return;
-            var msgString = JSON.stringify(message);
-            clog('C->S: ' + msgString);
-            channel.send(msgString);
-        };
-
-        var processSignalingMessage = function(message) {
-            var msg = JSON.parse(message);
-//            clog("received packed: " + msg);
-            if (msg.type === 'TOPEER') {
-                var peer_from = msg.from;
-                var peer_to = msg.to;
-                msg = msg.packet;
-                var pc = peers[peer_from];
-                if (undefined === pc) {
-                    clog("undefined pid " + peer_from);
-                    if (msg.type === 'PLEASE_CALL') {
-                        clog("pid " + peer_from + "asked for call");
-                        var rv = callback_getRemoteVideo(peer_from);
-                        var pc = new WebRTCO_PC(rv, localStream, peer_from, myPID, sendMessage);
-                        peers[peer_from] = pc;
-                        pc.doCall();
-                    } else return;
-                }
-                if (msg.type === 'offer') {
-                    pc.onOffer(msg);
-                } else if (msg.type === 'answer') {
-                    pc.onAnswer(msg);
-                } else if (msg.type === 'candidate') {
-                    pc.onCandidate(msg);
-                }
-            } else {
-                if (msg.type === 'CHATMSG') {
-                    if (null === callback_onPubChatMsgRecv) return;
-                    callback_onPubChatMsgRecv(msg.value);
-                } else if (msg.type === 'bye') {
-                    if (null !== callback_onBye) callback_onBye(msg.from);
-                } else if (msg.type === 'ROOM_ENTERED') {
-                    room = msg.value;
-                    myPID = msg.pid;
-                    clog("received room number: " + room);
-                    if (null !== callback_onRoomRecv && ! initiator) callback_onRoomRecv(room);
-                    initiator = false;
-                } else if (msg.type === 'ROOM_LEAVE') {
-                    window.location.href = "/";
-                } else if (msg.type === 'PEER_JOINED') {
-                        var pid = msg.pid;
-                        clog("peer joined: " + pid);
-                        var rv = callback_getRemoteVideo(pid);
-                        var pc = new WebRTCO_PC(rv, localStream, pid, myPID, sendMessage);
-                        peers[pid] = pc;
-                        var msg = {type: 'PLEASE_CALL'};
-                        sendMessage({type: 'TOPEER', from: myPID, to: pid, packet: msg});
-                }
-            }
-        };
-
-        // send public chat message via signalling server
-        this.sendPublicChatMessage = function(chatMsg) {
-            if (!channelReady) return;
-            sendMessage({"type" : "CHATMSG", "value" : chatMsg});
-        };
-
-        this.go = function(ls) {
-            localStream = ls;
-        channelReady = false;
-        channel = new WebSocket(options.signalingURL);
-        channel.onopen = onChannelOpened;
-        channel.onerror = onChannelError;
-        channel.onmessage = onChannelMessage;
-        channel.onclose = onChannelClosed;
-        }
-    };
-
-    /*
-     Media object
-     */
-    var WebRTCO_Media = function(localVideo, func) {
-        var localStream = null;
-        var localV = null;
-
-        var doGetUserMedia = function() {
-            var constraints = {"audio": true, "video": {"mandatory": {}, "optional": []}};
-            try {
-                clog("Requested access to local media with mediaConstraints:\n \"" + JSON.stringify(constraints) + "\"");
-                getUserMedia(constraints, onUserMediaSuccess, onUserMediaError);
-            } catch (e) {
-                clog("getUserMedia failed with exception: " + e.message);
-            }
-        };
-
-        var onUserMediaSuccess = function(stream) {
-            clog("User has granted access to local media.");
-            attachMediaStream(localV, stream);
-            localV.muted = true;
-            localV.play();
-            localStream = stream;
-            func(stream);
-
-//            clog("Creating PeerConnection.");
-//            createPeerConnection();
-//            clog("Adding local stream.");
-//            pc.addStream(localStream);
-
-//            if (initiator) doCall();
-        };
-
-        var onUserMediaError = function(error) {
-            clog("Failed to get access to local media. Error code was " + error.code);
-        };
-
-        localV = localVideo;
-        doGetUserMedia();
-    };
-
-    /*
-    Peer Connection Object
-     */
-    var WebRTCO_PC = function(rv, ls, rpid, lpid, func) {
-        var sendSignallingMessage = func;
-        var localStream = ls;
-        var remoteVideo = rv;
-        var pid_remote = rpid;
-        var pid_my = lpid;
-        var pc_config = {"iceServers":
-            [{url:'stun:23.21.150.121'},
-                {url:'stun:stun.l.google.com:19302'},
-                {url:'stun:stun01.sipphone.com'},
-                {url:'stun:stun.ekiga.net'},
-                {url:'stun:stun.fwdnet.net'},
-                {url:'stun:stun.ideasip.com'},
-                {url:'stun:stun.iptel.org'},
-                {url:'stun:stun.rixtelecom.se'},
-                {url:'stun:stun.schlund.de'},
-                {url:'stun:stun.l.google.com:19302'},
-                {url:'stun:stun1.l.google.com:19302'},
-                {url:'stun:stun2.l.google.com:19302'},
-                {url:'stun:stun3.l.google.com:19302'},
-                {url:'stun:stun4.l.google.com:19302'},
-                {url:'stun:stunserver.org'},
-                {url:'stun:stun.softjoys.com'},
-                {url:'stun:stun.voiparound.com'},
-                {url:'stun:stun.voipbuster.com'},
-                {url:'stun:stun.voipstunt.com'},
-                {url:'stun:stun.voxgratia.org'},
-                {url:'stun:stun.xten.com'},
-                {
-                    url: 'turn:numb.viagenie.ca',
-                    credential: 'muazkh',
-                    username: 'webrtc@live.com'
-                },
-                {
-                    url: 'turn:192.158.29.39:3478?transport=udp',
-                    credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
-                    username: '28224511:1379330808'
-                },
-                {
-                    url: 'turn:192.158.29.39:3478?transport=tcp',
-                    credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
-                    username: '28224511:1379330808'
-                }]};
-
-        var sendMessage = function(msg) {
-            sendSignallingMessage({type: 'TOPEER', from: pid_my, to: pid_remote, packet: msg});
-        }
-
-        var onIceCandidate = function(event) {
-            if (event.candidate)
-                sendMessage({type: 'candidate', label: event.candidate.sdpMLineIndex, id: event.candidate.sdpMid,
-                    candidate: event.candidate.candidate});
-
-            else clog("End of candidates.");
-        };
-
-        var onRemoteStreamAdded = function(event) {
-            clog("Remote stream added.");
-            attachMediaStream(remoteVideo, event.stream);
-            remoteVideo.play();
-//            remoteStream = event.stream;
-        };
-
-        var onRemoteStreamRemoved = function(event) {
-            clog("Remote stream removed.");
-        };
-
-        this.doCall = function() {
-            var constraints = {"optional": [], "mandatory": []};
-//        var constraints = {"optional": [], "mandatory": {"MozDontOfferDataChannel": true}};
-//        if (webrtcDetectedBrowser === "chrome")
-//            for (var prop in constraints.mandatory) if (prop.indexOf("Moz") != -1) delete constraints.mandatory[prop];
-
-//        constraints = mergeConstraints(constraints, sdpConstraints);
-            clog("Sending offer to peer, with constraints: \n  \"" + JSON.stringify(constraints) + "\".")
-            pc.createOffer(setLocalAndSendMessage, onErrorCallBack, constraints);
-        };
-
-        var doAnswer = function() {
-            clog("Sending answer to peer.");
-            pc.createAnswer(setLocalAndSendMessage, onErrorCallBack, sdpConstraints);
-        };
-
-        var onErrorCallBack = function(e) {
-            clog("Something wrong happened when answer or offer " + e.toString());
-        };
-
-//        var remoteHangup = function() {
-//            clog('Session terminated.');
-//            pc.close();
-//        };
-
-        var setLocalAndSendMessage = function(sessionDescription) {
-            sessionDescription.sdp = preferOpus(sessionDescription.sdp);
-            pc.setLocalDescription(sessionDescription);
-            sendMessage(sessionDescription);
-        };
-
-        this.onOffer = function(msg) {
-            pc.setRemoteDescription(new RTCSessionDescription(msg));
-            doAnswer();
-        };
-
-        this.onAnswer = function(msg) {
-            pc.setRemoteDescription(new RTCSessionDescription(msg));
-        };
-
-        this.onCandidate = function(msg) {
-            var candidate = new RTCIceCandidate({sdpMLineIndex:msg.label, candidate:msg.candidate});
-            pc.addIceCandidate(candidate);
-        };
-
-//        var pc_config = {"iceServers": [{"url": "stun:stun.l.google.com:19302"}]};
-//            var pc_constraints = {"optional": [{"DtlsSrtpKeyAgreement": true}]};
-//        if (webrtcDetectedBrowser == "firefox") pc_config = {"iceServers":[{"url":"stun:23.21.150.121"}]};
-
-        var pc_constraints = null;
-        var pc = null;
-
-        try {
-                pc = new RTCPeerConnection(pc_config, pc_constraints);
-                pc.onicecandidate = onIceCandidate;
-                clog("Created RTCPeerConnnection with:\n" +
-                    "  config: \"" + JSON.stringify(pc_config) + "\";\n" +
-                    "  constraints: \"" + JSON.stringify(pc_constraints) + "\".");
-            } catch (e) {
-                pc = null;
-                clog("Failed to create PeerConnection, exception: " + e.message);
-                return;
-            }
+	    try {
+	        pc = new RTCPeerConnection(pc_config, {});
+	        pc.onicecandidate = onIceCandidate;
             pc.onaddstream = onRemoteStreamAdded;
-            pc.onremovestream = onRemoteStreamRemoved;
-        clog("my stream is: " + localStream);
-            pc.addStream(localStream);
+	        pc.onremovestream = onRemoteStreamRemoved;
+//	        console.debug("Peer connection created");
+	    } catch (e) {
+	        pc = null;
+            pushCallback(ErrorCodes.PEER_CONNECTION, e.message);
+//	        console.debug("Failed to create peer connection: " + e.message);
+	    }
+        return API;
     };
+    /* end of peer connection object */
 
+    API.Adapter = new WebRTCOAdapter();
     /*
-     * WebRTC Adapter
+     * WebRTC media object
+     * 
+     * localVideoID - (mandatory) - ID of the video tag
+     * _constraints - (optional) - media access constraints
+     *
      */
-    var initWebRTCAdapter = function() {
-        if (navigator.mozGetUserMedia) {
-            webrtcDetectedBrowser = "firefox";
+    API.Media = (function(localVideoID) {
+        var API = {};
+	    var localVideo = document.getElementById(localVideoID);
+	    function doGetUserMedia() {
+	        try {
+//		        console.debug("Requesting access to media...");
+		        getUserMedia(constraints, onSuccess, onError);
+	        } catch (e) {
+                pushCallback(ErrorCodes.MEDIA, e.message);
+//		        console.error("Media access failed with error: " + e.message);
+		        return;
+	        }
+	    };
+	    function onSuccess(stream) {
+//	        console.debug("Media access granted");
+            localVideo.muted = true;
+	        localStream = stream;
+	        attachMediaStream(localVideo, localStream);
+	    };
+	    function onError(e) {
+            pushCallback(ErrorCodes.MEDIA, e.toString());
+//	        console.error("Failed to get media access: " + e);
+	    };
+        API.getLocalStream = function() {
+            return localStream;
+        }
+	    doGetUserMedia();
+        return API;
+    }(options.localVideoID));
+    /* end of media object */
 
-            RTCPeerConnection = mozRTCPeerConnection;
-            RTCSessionDescription = mozRTCSessionDescription;
-            RTCIceCandidate = mozRTCIceCandidate;
-            getUserMedia = navigator.mozGetUserMedia.bind(navigator);
+    /* 
+     * Signaling object
+     *
+     *
+     */
+    var Signaling;
+    if (!sandbox)
+        Signaling = (function() {
+	    var API = {};
+	    var ready = false;
+        var channel = null;
+        
+	    function onOpened() {
+//	        console.debug("Signaling channel opened");
+	        ready = true;
+	        var room = Utils.getRoomName();
+	        if (room !== undefined) {
+		        initiator = true;
+	        } else {
+                room = Utils.makeRandID(5);
+//                console.debug("Room name: " + room);
+		        initiator = false;
+	        }
+            API.Send({type: 'ROOM_ENTER', value: room + ''});
+	    };
 
-            attachMediaStream =
-                function(element, stream) {
-                    element.mozSrcObject = stream;
-                    element.play();
-                };
+	    function onMessage(m) {
+//	        console.debug('S->C: ' + m.data);
+	        processMessage(m.data);
+	    };
 
-            reattachMediaStream =
-                function(to, from) {
-                    to.mozSrcObject = from.mozSrcObject;
-                    to.play();
-                };
-            return true;
-        } else if (navigator.webkitGetUserMedia) {
-            webrtcDetectedBrowser = "chrome";
+	    function onError(e) {
+            pushCallback(ErrorCodes.SIGNALING, e.message);
+//	        console.debug("Error on signaling channel");
+	    };
+            
+	    function onClosed() {
+//	        console.debug("Signaling channel has been closed");
+	        ready = false;
+	    };
 
-            RTCPeerConnection = webkitRTCPeerConnection;
-            getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
-            attachMediaStream =
-                function(element, stream) {
-                    element.src = webkitURL.createObjectURL(stream);
-                };
-
-            reattachMediaStream =
-                function(to, from) {
-                    to.src = from.src;
-                };
-
-            if (!webkitMediaStream.prototype.getVideoTracks) {
-                webkitMediaStream.prototype.getVideoTracks =
-                    function() {
-                        return this.videoTracks;
-                    };
-                webkitMediaStream.prototype.getAudioTracks =
-                    function() {
-                        return this.audioTracks;
-                    };
+	    function processMessage(m) {
+	        var msg = JSON.parse(m);
+//            console.debug(m);
+	        if (msg.type == 'ROOM_IS_FULL') {
+                pushCallback(ErrorCodes.ROOM_IS_FULL);
+            } else if (msg.type == 'ENTERED_ROOM') {
+                var room_url = window.location + "?" + roomID + "=" + msg.roomid;
+                pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
+            } else if (msg.type == 'NEW_PEER') {
+                var FromPid = msg.pid;
+                Peers[FromPid] = new PeerConnection(getRemoteVideo());
+                Peers[FromPid].addStream(localStream);
+                Peers[FromPid].setPeer(FromPid);
+                Peers[FromPid].doCall();
+            } else if (msg.type = 'FROM') {
+                var peer = msg.value;
+                msg = msg.message;
+                if (msg.type == 'offer') {
+                    if (Peers.indexOf(peer) <= -1) {
+                        Peers[peer] = new PeerConnection(getRemoteVideo());
+                        Peers[peer].addStream(localStream);
+                        Peers[peer].setPeer(peer);
+                        Peers[peer].onOffer(msg);
+                    }
+                } else if (msg.type == 'answer') {
+                    Peers[peer].onAnswer(msg);
+                } else if (msg.type == 'candidate') {
+                    Peers[peer].onCandidate(msg);
+                }
             }
+	    };
+	    
+	    API.Send = function(m) {
+	        if (!ready) return;
+	        var s = JSON.stringify(m);
+//	        console.debug('C->S: ' + s);
+	        channel.send(s);
+	    };
 
-            if (!webkitRTCPeerConnection.prototype.getLocalStreams) {
-                webkitRTCPeerConnection.prototype.getLocalStreams =
-                    function() {
-                        return this.localStreams;
-                    };
-                webkitRTCPeerConnection.prototype.getRemoteStreams =
-                    function() {
-                        return this.remoteStreams;
-                    };
-            }
-            return true;
-        } else return false;
-    };
+        function init() {
+            if (null !== localStream) {
+	            channel = new WebSocket(signaling_url);
+	            channel.onopen = onOpened;
+	            channel.onerror = onError;
+	            channel.onmessage = onMessage;
+	            channel.onclose = onClosed;
+            } else setTimeout(init, 1000);
+        };
+        init();
+	    return API;
+    }());
+    /* end of signaling object */
 
-    initWebRTCAdapter();
-
-    _sc = new WebRTCO_SC(options);
-    _media = new WebRTCO_Media(options.localVideo, _sc.go);
-
+    return API;
 };
+/* end of WebRTCO object */
 
+/*
+ * WebRTC Adapter
+ *
+ */
+var WebRTCOAdapter = function() {
+    var API = {};
+    if (navigator.mozGetUserMedia) {
+        window.RTCPeerConnection = mozRTCPeerConnection;
+        window.RTCSessionDescription = mozRTCSessionDescription;
+        window.RTCIceCandidate = mozRTCIceCandidate;
+        window.getUserMedia = navigator.mozGetUserMedia.bind(navigator);
+        window.attachMediaStream = function(element, stream) {
+            element.mozSrcObject = stream;
+            element.play();
+        };
+        window.reattachMediaStream = function(to, from) {
+            to.mozSrcObject = from.mozSrcObject;
+            to.play();
+        };
+    } else if (navigator.webkitGetUserMedia) {
+        window.RTCPeerConnection = webkitRTCPeerConnection;
+        window.getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
+        window.attachMediaStream = function(element, stream) {
+            element.src = URL.createObjectURL(stream);
+        };
+        window.reattachMediaStream = function(to, from) {
+            to.src = from.src;
+        };
+        if (!webkitMediaStream.prototype.getVideoTracks) {
+            webkitMediaStream.prototype.getVideoTracks = function() {
+                return this.videoTracks;
+            };
+            webkitMediaStream.prototype.getAudioTracks = function() {
+                return this.audioTracks;
+            };
+        }
+        if (!webkitRTCPeerConnection.prototype.getLocalStreams) {
+            webkitRTCPeerConnection.prototype.getLocalStreams = function() {
+                return this.localStreams;
+            };
+            webkitRTCPeerConnection.prototype.getRemoteStreams = function() {
+                return this.remoteStreams;
+            };
+        }
+    }
+
+    var ua=navigator.userAgent,tem,M=ua.match(/(opera|chrome|safari|firefox|msie|trident(?=\/))\/?\s*(\d+)/i) || [];
+    if(/trident/i.test(M[1])) {
+        tem = /\brv[ :]+(\d+)/g.exec(ua) || [];
+        API.name = 'IE ';
+        API.version = (tem[1]||'');
+    } else if(M[1] === 'Chrome') {
+        tem = ua.match(/\bOPR\/(\d+)/);
+        if (tem != null) {
+            API.name = 'Opera';
+            API.version = tem[1]
+        }
+    }
+    if (typeof API.name === 'undefined') {
+        M = M[2]? [M[1], M[2]]: [navigator.appName, navigator.appVersion, '-?'];
+        if ((tem = ua.match(/version\/(\d+)/i)) != null) {
+            M.splice(1,1,tem[1]);
+        }
+        API.name = M[0];
+        API.version = M[1];
+    }
+    return API;
+};
+    /* end of Adapter object */
