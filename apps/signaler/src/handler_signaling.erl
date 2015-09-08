@@ -5,19 +5,20 @@
          websocket_info/3, websocket_terminate/3]).
 
 -record(state, {
-          client = undefined :: undefined | binary(),
+          ip = undefined :: undefined | binary(),
           state = undefined :: undefined | connected | running,
-          room = undefined :: undefined | binary()
+          room = undefined :: undefined | binary(),
+          origin = undefined :: binary()
 }).
 
 init(_Any, _Req, _Opt) ->
     {upgrade, protocol, cowboy_websocket}.
 
-websocket_init(_TransportName, Req, _Opt) ->
-    {Client, Req1} = cowboy_req:header(<<"x-forwarded-for">>, Req),
-%    io:fwrite("d :~p~n",[Client]),
-    State = #state{client = Client, state = connected},
-    {ok, Req1, State, hibernate}.
+websocket_init(tcp, Req, _Opts) ->
+    {Origin, Req1} = cowboy_req:header(<<"origin">>, Req),
+    {IP, Req2} = cowboy_req:header(<<"x-forwarded-for">>, Req1),
+    State = #state{ip = IP, state = connected, origin = Origin},
+    {ok, Req2, State, hibernate}.
 
 websocket_handle({text,Data}, Req, State) ->
     StateNew = case (State#state.state) of
@@ -30,22 +31,20 @@ websocket_handle({text,Data}, Req, State) ->
     Type = proplists:get_value(<<"type">>,JSON),
     case Type of
         <<"ROOM_ENTER">> ->
-            Room = proplists:get_value(<<"value">>,JSON),
+            RoomParam = proplists:get_value(<<"value">>,JSON),
+            Room = {State#state.origin,RoomParam},
             Participants = gproc:lookup_pids({p,l,Room}),
+            gproc:reg({p,l,Room}),
             case length(Participants) of
                 0 ->
-                    gproc:reg({p,l,Room}),
-                    S = (StateNew#state{room = Room}),
-                    Resp = list_to_binary(n2o_json:encode([{type, <<"ENTERED_ROOM">>},{roomid, Room}])),
-                    {reply, {text, <<Resp/binary>>}, Req, S, hibernate};
-                1 -> 
-                    gproc:reg({p,l,Room}),
-                    S = (StateNew#state{room = Room}),
+                    Resp = list_to_binary(n2o_json:encode([{type, <<"ENTERED_ROOM">>},{roomid, RoomParam}])),
+                    {reply, {text, <<Resp/binary>>}, Req, StateNew#state{room = Room}, hibernate};
+                1 ->
                     broadcast2room(newpeer, Room),
-                    {ok, Req, S, hibernate};
+                    {ok, Req, StateNew#state{room = Room}, hibernate};
                _ ->
                     Resp = list_to_binary(n2o_json:encode([{type, <<"ROOM_IS_FULL">>}])),
-                    {reply, {text, <<Resp/binary>>}, Req, StateNew, hibernate}
+                    {reply, {text, <<Resp/binary>>}, Req, StateNew, stop}
             end;
         <<"TO">> ->
             To = proplists:get_value(<<"value">>, JSON),
@@ -54,7 +53,7 @@ websocket_handle({text,Data}, Req, State) ->
             ToPid ! {frompeer, self(), M},
             {ok, Req, StateNew, hibernate};
         _ ->
-            broadcast2room(Data, StateNew#state.room),
+%            broadcast2room(Data,StateNew#state.room),
             {ok, Req, StateNew, hibernate}
     end;
 
