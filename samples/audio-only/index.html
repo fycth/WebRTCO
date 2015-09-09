@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Home</title>
+  <meta charset="utf-8">
+  <meta name="format-detection" content="telephone=no"/>
+  <script type="text/javascript" src="https://cdn.oslikas.com/js/WebRTCO-1.9-beta-min.js" charset="utf-8"></script>
+</head>
+
+<body onload="startconf()">
+<audio id="localVideo" autoplay="autoplay"></audio>
+<audio id="remoteVideo" autoplay="autoplay"></audio>
+<br>
+<span id="link"></span>
+<script>
+ var w;
+
+ var default_sdp_constraints = {
+     mandatory: {
+         OfferToReceiveAudio: true,
+         OfferToReceiveVideo: false
+     },
+     optional: []
+ };
+
+ var default_constraints = {
+     audio: true,
+	 video: false
+ };
+
+ function call_back(msg) {
+    if (msg.code === w.ErrorCodes.ENTERED_ROOM) got_room(msg.message);
+    else console.error(msg);
+ };
+ 
+ function startconf() {
+     w = new WebRTCO(
+         {localVideoID: "localVideo",
+          remoteVideoID: "remoteVideo",
+          constraints: default_constraints,
+          sdp_constraints: default_sdp_constraints,
+          call_back: call_back
+         });
+     console.log(w.Adapter.name + " " + w.Adapter.version);
+ };
+ 
+ function got_room(msg) {
+     document.getElementById('link').innerHTML = "<a href=\"" + msg + "\">Share Room Link</a>";
+ };
+</script>
+
+</body>
+</html>
