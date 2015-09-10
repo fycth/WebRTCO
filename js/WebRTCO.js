@@ -16,6 +16,7 @@
    options.sandbox = if set, don't make calls, just get user media and stop
    options.own_signaler = URL to the WebRTCO signaler installed on the customer's side
    options.call_back = it is a function that will be called when we need to notify client on an event (error happened, created room etc.)
+   options.no_data_channel - if set, don't create data channel (created by default)
 */
 
 var WebRTCO = function(options) {
@@ -92,7 +93,9 @@ var WebRTCO = function(options) {
         // Room is full
         ROOM_IS_FULL: 1005,
         // Remote Video ID is not defined
-        REMOTE_ID: 1006
+        REMOTE_ID: 1006,
+        // Can't create data channel
+        DATA_CHANNEL: 1007
     };
     API.ErrorCodes = ErrorCodes;
 
@@ -165,7 +168,7 @@ var WebRTCO = function(options) {
 
 	    API.doCall = function() {
 //	        console.debug("Sending offer to the peer. Constraints: " + JSON.stringify(pc_constraints));
-            createDataChannel();
+            if (typeof options.no_data_channel === 'undefined') createDataChannel();
 	        pc.createOffer(setLocalAndSendMessage, onError, pc_constraints);
 	    };
 
@@ -213,6 +216,8 @@ var WebRTCO = function(options) {
             try {
                 data_channel = pc.createDataChannel("datachannel_" + peer);
             } catch (e) {
+                pushCallback(ErrorCodes.DATA_CHANNEL,e);
+                data_channel = null;
 //                console.error("Error creating data channel " + e);
                 return;
             }
@@ -227,7 +232,7 @@ var WebRTCO = function(options) {
             if (null !== data_channel) data_channel.send(message);
         };
         function onDataChannelOpen(event) {
-            console.info("Data channel opened");
+//            console.info("Data channel opened");
 //            send2dataChannel("hello to " + peer + " !");
         };
         function onDataChannelClose(event) {
@@ -236,7 +241,7 @@ var WebRTCO = function(options) {
         };
         function onReceiveMessageCallback(event) {
 //            console.info("data message: " + event.data);
-        }
+        };
         // end of Data Channel
         
 	    try {
