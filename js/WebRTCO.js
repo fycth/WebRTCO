@@ -165,6 +165,7 @@ var WebRTCO = function(options) {
 
 	    API.doCall = function() {
 //	        console.debug("Sending offer to the peer. Constraints: " + JSON.stringify(pc_constraints));
+            createDataChannel();
 	        pc.createOffer(setLocalAndSendMessage, onError, pc_constraints);
 	    };
 
@@ -201,11 +202,49 @@ var WebRTCO = function(options) {
             pc.addStream(stream);
         }
 
+        // Data Channel
+        var data_channel = null;
+        function onDataChannel(event) {
+            console.info("Received data channel creating request");
+            data_channel = event.channel;
+            initDataChannel();
+        };
+        function createDataChannel() {
+            try {
+                data_channel = pc.createDataChannel("datachannel_" + peer);
+            } catch (e) {
+//                console.error("Error creating data channel " + e);
+                return;
+            }
+            initDataChannel();
+        };
+        function initDataChannel() {
+            data_channel.onopen = onDataChannelOpen;
+            data_channel.onclose = onDataChannelClose;
+            data_channel.onmessage = onReceiveMessageCallback;
+        };
+        function send2dataChannel(message) {
+            if (null !== data_channel) data_channel.send(message);
+        };
+        function onDataChannelOpen(event) {
+            console.info("Data channel opened");
+//            send2dataChannel("hello to " + peer + " !");
+        };
+        function onDataChannelClose(event) {
+            data_channel = null;
+//            console.info("Data channel closed");
+        };
+        function onReceiveMessageCallback(event) {
+//            console.info("data message: " + event.data);
+        }
+        // end of Data Channel
+        
 	    try {
 	        pc = new RTCPeerConnection(pc_config, {});
 	        pc.onicecandidate = onIceCandidate;
             pc.onaddstream = onRemoteStreamAdded;
 	        pc.onremovestream = onRemoteStreamRemoved;
+            pc.ondatachannel = onDataChannel;
 //	        console.debug("Peer connection created");
 	    } catch (e) {
 	        pc = null;
