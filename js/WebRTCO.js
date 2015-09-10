@@ -1,5 +1,5 @@
 
-// Description: 
+// Description: Free WebRTC Framework
 // Author: Andrii Sergiienko
 // Created: Sun Apr  5 15:15:20 2015 (+0300)
 // Version: 1.9-beta
