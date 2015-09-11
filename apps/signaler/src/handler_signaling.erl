@@ -50,7 +50,13 @@ websocket_handle({text,Data}, Req, State) ->
             To = proplists:get_value(<<"value">>, JSON),
             M = proplists:get_value(<<"message">>, JSON),
             ToPid = list_to_pid(binary_to_list(To)),
-            ToPid ! {frompeer, self(), M},
+            Participants = gproc:lookup_pids({p,l,StateNew#state.room}),
+            case lists:member(ToPid,Participants) of
+                true ->
+                    ToPid ! {frompeer, self(), M};
+                false ->
+                    ok
+            end,
             {ok, Req, StateNew, hibernate};
         _ ->
 %            broadcast2room(Data,StateNew#state.room),
