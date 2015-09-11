@@ -60,11 +60,29 @@ var WebRTCO = function(options) {
         optional: []
     };
 
+    /* screen casting constraints */
+    var screen_casting_constraints = {
+        firefox: {
+            audio: false,
+            video: {
+                mozMediaSource: 'screen',
+                mediaSource: 'screen'
+            }
+        },
+        chrome: {
+            audio: false,
+            video: {
+            }
+        }
+    };
+    /* end of screencasting constraints */
+    
     /* Look at the options and do initialization */
     var pc_config = typeof options.pc_config !== 'undefined' ? options.pc_config : default_pc_config;
     var constraints = typeof options.constraints !== 'undefined' ? options.constraints : default_constraints;
     var sdpConstraints = typeof options.sdp_constraints !== 'undefined' ? options.sdp_constraints : default_sdp_constraints;
     var localStream = null;
+    var localScreenStream = null;
     var roomID = typeof options.roomID !== 'undefined' ? options.roomID : 'room';
     var sandbox = typeof options.sandbox !== 'undefined' ? true : false;
     var call_back = typeof options.call_back !== 'undefined' ? options.call_back : undefined;
@@ -267,14 +285,14 @@ var WebRTCO = function(options) {
      * localVideoID - (mandatory) - ID of the video tag
      * _constraints - (optional) - media access constraints
      *
-     */
-    API.Media = (function(localVideoID) {
+     */    
+    var WebRTCOMedia = function(localVideoID, _constraints, _stream_callback) {
         var API = {};
 	    var localVideo = document.getElementById(localVideoID);
 	    function doGetUserMedia() {
 	        try {
 //		        console.debug("Requesting access to media...");
-		        getUserMedia(constraints, onSuccess, onError);
+		        getUserMedia(_constraints, onSuccess, onError);
 	        } catch (e) {
                 pushCallback(ErrorCodes.MEDIA, e.message);
 //		        console.error("Media access failed with error: " + e.message);
@@ -284,20 +302,19 @@ var WebRTCO = function(options) {
 	    function onSuccess(stream) {
 //	        console.debug("Media access granted");
             localVideo.muted = true;
-	        localStream = stream;
-	        attachMediaStream(localVideo, localStream);
+	        _stream_callback(stream);
+	        attachMediaStream(localVideo, stream);
 	    };
 	    function onError(e) {
             pushCallback(ErrorCodes.MEDIA, e.toString());
 //	        console.error("Failed to get media access: " + e);
 	    };
-        API.getLocalStream = function() {
-            return localStream;
-        }
 	    doGetUserMedia();
         return API;
-    }(options.localVideoID));
+    };
     /* end of media object */
+
+    var Media = new WebRTCOMedia(options.localVideoID, constraints, function(stream) { localStream = stream; });
 
     /* 
      * Signaling object
@@ -392,6 +409,22 @@ var WebRTCO = function(options) {
 	    return API;
     }());
     /* end of signaling object */
+
+    // Return local stream
+    API.getLocalStream = function() {
+        return localStream;
+    };
+
+    function getScreenCastingConstraints() {
+        if (API.Adapter.name === 'Firefox') return screen_casting_constraints.firefox;
+        else if (API.Adapter.name === 'Chrome') return screen_casting_constraints.chrome;
+        else return null;
+    };
+
+    API.doScreenCasting = function(screenCastingVideoID) {
+        var constraints = getScreenCastingConstraints();
+        API.Media = new WebRTCOMedia(screenCastingVideoID, constraints, function(stream) { localScreenStream = stream; });
+    };
 
     return API;
 };
