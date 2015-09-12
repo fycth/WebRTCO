@@ -8,3 +8,6 @@ bin
 version.tag
 tmp
 version.tag
+samples/*/deps
+samples/*/apps/*/ebin
+samples/.applist
