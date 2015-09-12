@@ -322,92 +322,97 @@ var WebRTCO = function(options) {
      *
      */
     var Signaling;
-    if (!sandbox)
-        Signaling = (function() {
-	    var API = {};
-	    var ready = false;
-        var channel = null;
+    if (!sandbox) {
+        if (typeof options.signaling !== 'undefined') {
+            Signaling = options.signaling;
+        } else {
+            Signaling = (function() {
+	            var API = {};
+	            var ready = false;
+                var channel = null;
         
-	    function onOpened() {
+	            function onOpened() {
 //	        console.debug("Signaling channel opened");
-	        ready = true;
-	        var room = Utils.getRoomName();
-	        if (room !== undefined) {
-		        initiator = true;
-	        } else {
-                room = Utils.makeRandID(5);
+	                ready = true;
+	                var room = Utils.getRoomName();
+	                if (room !== undefined) {
+		                initiator = true;
+	                } else {
+                        room = Utils.makeRandID(5);
 //                console.debug("Room name: " + room);
-		        initiator = false;
-	        }
-            API.Send({type: 'ROOM_ENTER', value: room + ''});
-	    };
+		                initiator = false;
+	                }
+                    API.Send({type: 'ROOM_ENTER', value: room + ''});
+	            };
 
-	    function onMessage(m) {
+	            function onMessage(m) {
 //	        console.debug('S->C: ' + m.data);
-	        processMessage(m.data);
-	    };
+	                processMessage(m.data);
+	            };
 
-	    function onError(e) {
-            pushCallback(ErrorCodes.SIGNALING, e.message);
+	            function onError(e) {
+                    pushCallback(ErrorCodes.SIGNALING, e.message);
 //	        console.debug("Error on signaling channel");
-	    };
+	            };
             
-	    function onClosed() {
+	            function onClosed() {
 //	        console.debug("Signaling channel has been closed");
-	        ready = false;
-	    };
+	                ready = false;
+	            };
 
-	    function processMessage(m) {
-	        var msg = JSON.parse(m);
+	            function processMessage(m) {
+	                var msg = JSON.parse(m);
 //            console.debug(m);
-	        if (msg.type == 'ROOM_IS_FULL') {
-                pushCallback(ErrorCodes.ROOM_IS_FULL);
-            } else if (msg.type == 'ENTERED_ROOM') {
-                var room_url = window.location + "?" + roomID + "=" + msg.roomid;
-                pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
-            } else if (msg.type == 'NEW_PEER') {
-                var FromPid = msg.pid;
-                Peers[FromPid] = new PeerConnection(getRemoteVideo());
-                Peers[FromPid].addStream(localStream);
-                Peers[FromPid].setPeer(FromPid);
-                Peers[FromPid].doCall();
-            } else if (msg.type = 'FROM') {
-                var peer = msg.value;
-                msg = msg.message;
-                if (msg.type == 'offer') {
-                    if (Peers.indexOf(peer) <= -1) {
-                        Peers[peer] = new PeerConnection(getRemoteVideo());
-                        Peers[peer].addStream(localStream);
-                        Peers[peer].setPeer(peer);
-                        Peers[peer].onOffer(msg);
+	                if (msg.type == 'ROOM_IS_FULL') {
+                        pushCallback(ErrorCodes.ROOM_IS_FULL);
+                    } else if (msg.type == 'ENTERED_ROOM') {
+                        var room_url = window.location + "?" + roomID + "=" + msg.roomid;
+                        pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
+                    } else if (msg.type == 'NEW_PEER') {
+                        var FromPid = msg.pid;
+                        Peers[FromPid] = new PeerConnection(getRemoteVideo());
+                        Peers[FromPid].addStream(localStream);
+                        Peers[FromPid].setPeer(FromPid);
+                        Peers[FromPid].doCall();
+                    } else if (msg.type = 'FROM') {
+                        var peer = msg.value;
+                        msg = msg.message;
+                        if (msg.type == 'offer') {
+                            if (Peers.indexOf(peer) <= -1) {
+                                Peers[peer] = new PeerConnection(getRemoteVideo());
+                                Peers[peer].addStream(localStream);
+                                Peers[peer].setPeer(peer);
+                                Peers[peer].onOffer(msg);
+                            }
+                        } else if (msg.type == 'answer') {
+                            Peers[peer].onAnswer(msg);
+                        } else if (msg.type == 'candidate') {
+                            Peers[peer].onCandidate(msg);
+                        }
                     }
-                } else if (msg.type == 'answer') {
-                    Peers[peer].onAnswer(msg);
-                } else if (msg.type == 'candidate') {
-                    Peers[peer].onCandidate(msg);
-                }
-            }
-	    };
+	            };
 	    
-	    API.Send = function(m) {
-	        if (!ready) return;
-	        var s = JSON.stringify(m);
+	            API.Send = function(m) {
+	                if (!ready) return;
+	                var s = JSON.stringify(m);
 //	        console.debug('C->S: ' + s);
-	        channel.send(s);
-	    };
+	                channel.send(s);
+	            };
 
-        function init() {
-            if (null !== localStream) {
-	            channel = new WebSocket(signaling_url);
-	            channel.onopen = onOpened;
-	            channel.onerror = onError;
-	            channel.onmessage = onMessage;
-	            channel.onclose = onClosed;
-            } else setTimeout(init, 1000);
-        };
-        init();
-	    return API;
-    }());
+                function init() {
+                    if (null !== localStream) {
+	                    channel = new WebSocket(signaling_url);
+	                    channel.onopen = onOpened;
+	                    channel.onerror = onError;
+	                    channel.onmessage = onMessage;
+	                    channel.onclose = onClosed;
+                    } else setTimeout(init, 1000);
+                };
+                init();
+	            return API;
+            }());
+        }
+    }
     /* end of signaling object */
 
     // Return local stream
