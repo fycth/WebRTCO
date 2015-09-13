@@ -17,6 +17,7 @@
    options.own_signaler = URL to the WebRTCO signaler installed on the customer's side
    options.call_back = it is a function that will be called when we need to notify client on an event (error happened, created room etc.)
    options.no_data_channel - if set, don't create data channel (created by default)
+   options.hq_audio - if set, enable high-quality audio (stereo, 44100, 256kb/s)
 */
 
 var WebRTCO = function(options) {
@@ -201,9 +202,48 @@ var WebRTCO = function(options) {
 	    };
 	    
 	    function setLocalAndSendMessage(sdp) {
+            if (typeof options.hq_audio !== 'undefined') {
+                sdp.sdp = setSDPBand(sdp.sdp);
+                sdp.sdp = setSDPStereo(sdp.sdp);
+            }
 	        pc.setLocalDescription(sdp);
 	        send2peer(sdp);
 	    };
+
+        setSDPBand(sdp) {
+            //    sdp = sdp.replace( /b=AS([^\r\n]+\r\n)/g , '');
+            sdp = sdp.replace( /a=mid:audio\r\n/g , 'a=mid:audio\r\nb=AS:320\r\n');
+            //    sdp = sdp.replace( /a=mid:video\r\n/g , 'a=mid:video\r\nb=AS:4096\r\n');
+            //    sdp = sdp.replace( /a=mid:data\r\n/g , 'a=mid:data\r\nb=AS:163840\r\n');
+            return sdp;
+        }
+        setSDPStereo(sdp) {
+            var sdpLines = sdp.split('\r\n');
+            var fmtpLineIndex = null;
+            for (var i = 0; i < sdpLines.length; i++) {
+                if (sdpLines[i].search('opus/48000') !== -1) {
+                    var opusPayload = extractSdp(sdpLines[i], /:(\d+) opus\/48000/i);
+                    break;
+                }
+            }
+            for (var i = 0; i < sdpLines.length; i++) {
+                if (sdpLines[i].search('a=fmtp') !== -1) {
+                    var payload = extractSdp(sdpLines[i], /a=fmtp:(\d+)/ );
+                    if (payload === opusPayload) {
+                        fmtpLineIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (fmtpLineIndex === null) return sdp;
+            //stereo - ability to receive stereo
+            //sprop-stereo - ability to produce stereo
+            //usedtx - don't send audio signal if nothing comes from the source
+            sdpLines[fmtpLineIndex] = sdpLines[fmtpLineIndex].concat('; stereo=1; sprop-stereo=1; usedtx=0; x-google-min-bitrate=256; x-google-max-bitrate=320; maxaveragebitrate=' + (320 * 1024) + ';');
+            //maxaveragebitrate=' + (128 * 1024) + '; maxplaybackrate=48000');
+            sdp = sdpLines.join('\r\n');
+            return sdp;
+        }
 
 	    API.onOffer = function(m) {
 	        pc.setRemoteDescription(new RTCSessionDescription(m));
@@ -279,6 +319,8 @@ var WebRTCO = function(options) {
     /* end of peer connection object */
 
     API.Adapter = new WebRTCOAdapter();
+    var browserName = API.Adapter.name;
+    
     /*
      * WebRTC media object
      * 
@@ -289,6 +331,10 @@ var WebRTCO = function(options) {
     var WebRTCOMedia = function(localVideoID, _constraints, _stream_callback) {
         var API = {};
 	    var localVideo = document.getElementById(localVideoID);
+        if (typeof options.hq_audio !== 'undefined' && browserName === 'Chrome') {
+            _constraints.audio.mandatory.echoCancellation = false;
+            _constraints.audio.mandatory.googEchoCancellation = false;
+        }
 	    function doGetUserMedia() {
 	        try {
 //		        console.debug("Requesting access to media...");
