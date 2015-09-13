@@ -210,14 +210,14 @@ var WebRTCO = function(options) {
 	        send2peer(sdp);
 	    };
 
-        setSDPBand(sdp) {
+        function setSDPBand(sdp) {
             //    sdp = sdp.replace( /b=AS([^\r\n]+\r\n)/g , '');
             sdp = sdp.replace( /a=mid:audio\r\n/g , 'a=mid:audio\r\nb=AS:320\r\n');
             //    sdp = sdp.replace( /a=mid:video\r\n/g , 'a=mid:video\r\nb=AS:4096\r\n');
             //    sdp = sdp.replace( /a=mid:data\r\n/g , 'a=mid:data\r\nb=AS:163840\r\n');
             return sdp;
         }
-        setSDPStereo(sdp) {
+        function setSDPStereo(sdp) {
             var sdpLines = sdp.split('\r\n');
             var fmtpLineIndex = null;
             for (var i = 0; i < sdpLines.length; i++) {
