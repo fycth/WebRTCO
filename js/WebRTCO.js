@@ -101,6 +101,8 @@ var WebRTCO = function(options) {
     var ErrorCodes = {
         // New room created, got the room URL
         ENTERED_ROOM: 100,
+        // Created new peer connection
+        NEW_PEER_CONNECTION: 101,
         // Unknown error
         UNKNOWN: 10001,
         // Can't create peer connection
@@ -162,6 +164,7 @@ var WebRTCO = function(options) {
         var remoteVideo = document.getElementById(remoteVideoID);
 	    var pc_constraints = {};
         var peer;
+        var pc;
         API.setPeer = function(p) {
             peer = p;
         };
@@ -476,6 +479,14 @@ var WebRTCO = function(options) {
         var constraints = getScreenCastingConstraints();
         API.Media = new WebRTCOMedia(screenCastingVideoID, constraints, function(stream) { localScreenStream = stream; });
     };
+
+    /* for 3rd-party signaling */
+    API.getPeerConnection = function(remoteVideoID) {
+        var pc = new PeerConnection(remoteVideoID);
+        pc.addStream(localStream);
+        return pc;
+    }
+    /* end of */
 
     return API;
 };
