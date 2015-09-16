@@ -7,24 +7,32 @@
 %%% Created : 25. Jan 2015 1:45 AM
 %%%-------------------------------------------------------------------
 
--module(web_sup).
+-module(signaler).
 -author("Andrii Sergiienko <andrii@sergiienko.me>").
 -behaviour(supervisor).
+-behaviour(application).
 
 %% API
--export([start_link/0, init/1]).
-
--compile(export_all).
+-export([init/1,start/2,stop/1,main/1]).
 
 -define(APP, signaler).
 
-start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+main(A)    -> mad:main(A).
+start()    -> start(normal,[]).
+start(_,_) -> supervisor:start_link({local,?APP},?APP,[]).
+stop(_)    -> ok.
+
+port() ->
+    [{port, wf:config(n2o,port,8000)}].
+env() ->
+    [{env, [{dispatch, dispatch_rules()}]}].
 
 init([]) ->
-  {ok,_} = cowboy:start_http(http, 3,
-                        [{port, wf:config(signaler,port,8001)}],
-                        [{env, [{dispatch, dispatch_rules()}]}]),
-  {ok, {{one_for_one, 5, 10}, []}}.
+    case cowboy:start_http(http,3,port(),env()) of
+        {ok,_} -> ok;
+        {error,_} -> halt(abort,[])
+    end,
+    {ok, {{one_for_one, 5, 10}, []}}.
 
 mime() -> [{mimetypes, cow_mimetypes, all}].
 
