@@ -151,7 +151,7 @@ var WebRTCO = function(options) {
             for(var i = 0; i < limit; i++)
                 rand_text += possible.charAt(Math.floor(Math.random() * possible.length));
 	        return rand_text;
-        }
+        };
 	    return API;
     }());
     /* end of Utils object */
@@ -270,7 +270,7 @@ var WebRTCO = function(options) {
 
         API.addStream = function(stream) {
             pc.addStream(stream);
-        }
+        };
 
         // Data Channel
         var data_channel = null;
@@ -503,7 +503,7 @@ var WebRTCO = function(options) {
         var pc = new PeerConnection(remoteVideoID);
         pc.addStream(localStream);
         return pc;
-    }
+    };
     /* end of */
 
     return API;
@@ -608,11 +608,11 @@ var WebRTCO_BERT = function() {
 
     function ar(o) { return Array.isArray(o.v)?o.v:utf8_toByteArray(o.v).v;}
     function fl(a) { return a.reduce(function(f,t){return f.concat(Array.isArray(t)?fl(t):t);},[]);}
-    API.atom = function(o)   { return {t:100,v:utf8_toByteArray(o).v}; }
-    API.bin = function(o)    { return {t:109,v:utf8_toByteArray(o).v}; }
-    API.tuple = function()   { return {t:104,v:Array.apply(null,arguments)}; }
-    API.list = function()    { return {t:108,v:Array.apply(null,arguments)}; }
-    API.number = function(o) { return {t:98,v:o}; }
+    API.atom = function(o)   { return {t:100,v:utf8_toByteArray(o).v}; };
+    API.bin = function(o)    { return {t:109,v:utf8_toByteArray(o).v}; };
+    API.tuple = function()   { return {t:104,v:Array.apply(null,arguments)}; };
+    API.list = function()    { return {t:108,v:Array.apply(null,arguments)}; };
+    API.number = function(o) { return {t:98,v:o}; };
     function enc(o)    { return new Uint8Array(fl([131,ein(o)])); }
     function ein(o)    { return Array.isArray(o)?en_108({t:108,v:o}):eval('en_'+o.t)(o); }
     function en_undefined(o) { return [106]; }
