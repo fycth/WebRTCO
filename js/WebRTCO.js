@@ -608,7 +608,7 @@ var WebRTCO_BERT = function() {
 
     // BERT Encoder
 
-    function uc(u1,u2) { if (u1.byteLength == 0) return u2; if (u2.byteLength == 0) return u1; }
+    function uc(u1,u2) { if (u1.byteLength == 0) return u2; if (u2.byteLength == 0) return u1; console.error("uc error"); return 0; }
     function ar(o)     { return o.v instanceof ArrayBuffer ? new Uint8Array(o.v) : o.v instanceof Uint8Array ? o.v :
                      Array.isArray(o.v) ? new Uint8Array(o.v) : new Uint8Array(utf8_toByteArray(o.v).v);}
     function fl(a)     { return a.reduce(function(f,t){ return uc(f, t instanceof Uint8Array ? t :
