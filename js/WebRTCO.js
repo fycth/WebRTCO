@@ -493,6 +493,12 @@ var WebRTCO = function(options) {
         for (i = 0; i < audioTracks.length; i++) audioTracks[i].enabled = mute;
     };
 
+    // pause/resume local video
+    API.pauseVideo = function(pause) {
+        var videoTracks = localStream.getVideoTracks();
+        for (i = 0; i < videoTracks.length; i++) videoTracks[i].enabled = pause;
+    };
+
     function getScreenCastingConstraints() {
         if (API.Adapter.name === 'Firefox') return screen_casting_constraints.firefox;
         else if (API.Adapter.name === 'Chrome') return screen_casting_constraints.chrome;
