@@ -487,6 +487,12 @@ var WebRTCO = function(options) {
         return localStream;
     };
 
+    // mute/unmute local audio tracks
+    API.muteAudio = function(mute) {
+        var audioTracks = localStream.getAudioTracks();
+        for (i = 0; i < audioTracks.length; i++) audioTracks[i].enabled = mute;
+    };
+
     function getScreenCastingConstraints() {
         if (API.Adapter.name === 'Firefox') return screen_casting_constraints.firefox;
         else if (API.Adapter.name === 'Chrome') return screen_casting_constraints.chrome;
