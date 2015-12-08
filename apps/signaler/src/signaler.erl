@@ -40,5 +40,6 @@ dispatch_rules() ->
   cowboy_router:compile(
     [{'_', [
         {"/WebRTCO-app/signaling/1.9/[...]", handler_signaling, []},
+        {"/WebRTCO-app/signaling/1.12/[...]", handler_signaling, []},
         {'_', n2o_cowboy, []}
     ]}]).

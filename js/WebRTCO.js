@@ -22,7 +22,7 @@
 
 var WebRTCO = function(options) {
     var API = {};
-    var signaling_url = typeof options.own_signaler !== 'undefined' ? options.own_signaler : "wss://www.oslikas.com/WebRTCO-app/signaling/1.9/";
+    var signaling_url = typeof options.own_signaler !== 'undefined' ? options.own_signaler : "wss://www.oslikas.com/WebRTCO-app/signaling/1.12/";
     if (typeof options === 'undefined') {
 	    console.error("You should pass options. Please, refer to the documentation.");
 	    return;
@@ -116,7 +116,9 @@ var WebRTCO = function(options) {
         // Remote Video ID is not defined
         REMOTE_ID: 1006,
         // Can't create data channel
-        DATA_CHANNEL: 1007
+        DATA_CHANNEL: 1007,
+        // public message from peer
+        PUBLIC_MESSAGE: 1008
     };
     API.ErrorCodes = ErrorCodes;
 
@@ -314,9 +316,9 @@ var WebRTCO = function(options) {
 	    try {
 	        pc = new RTCPeerConnection(pc_config, {});
 	        pc.onicecandidate = onIceCandidate;
-            pc.onaddstream = onRemoteStreamAdded;
-	        pc.onremovestream = onRemoteStreamRemoved;
-            pc.ondatachannel = onDataChannel;
+          pc.onaddstream = onRemoteStreamAdded;
+          pc.onremovestream = onRemoteStreamRemoved;
+          pc.ondatachannel = onDataChannel;
 //	        console.debug("Peer connection created");
 	    } catch (e) {
 	        pc = null;
@@ -415,29 +417,31 @@ var WebRTCO = function(options) {
 	                ready = false;
 	            };
 
-	            function processMessage(m) {
+	              function processMessage(m) {
                     var r = new FileReader();
                     r.addEventListener("loadend", function() {
                         var msg = BERT.decode(r.result);
                         // look at the message type
-                        switch (msg.v[0].v) {
+                        switch (BERT.ab2str(msg.v[0].v)) {
                             case "ROOM_IS_FULL":
                                 pushCallback(ErrorCodes.ROOM_IS_FULL);
                                 break;
                             case "ENTERED_ROOM":
-                                var room_url = window.location + "?" + roomID + "=" + msg.v[1].v;
+                                var room_url = window.location + "?" + roomID + "=" + BERT.ab2str(msg.v[1].v);
                                 pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
                                 break;
                             case "NEW_PEER":
-                                var FromPid = msg.v[1].v;
+                                var FromPid = BERT.ab2str(msg.v[1].v);
                                 Peers[FromPid] = new PeerConnection(getRemoteVideo());
                                 Peers[FromPid].addStream(localStream);
                                 Peers[FromPid].setPeer(FromPid);
                                 Peers[FromPid].doCall();
                                 break;
+                            case "NEW_PUBLIC":
+                                pushCallback(ErrorCodes.PUBLIC_MESSAGE, {from: BERT.ab2str(msg.v[1].v), msg: BERT.ab2str(msg.v[2].v)});
                             case "FROM":
-                                var peer = msg.v[1].v;
-                                msg = JSON.parse(msg.v[2].v);
+                                var peer = BERT.ab2str(msg.v[1].v);
+                                msg = JSON.parse(BERT.ab2str(msg.v[2].v));
                                 if (msg.type == 'offer') {
                                     if (Peers.indexOf(peer) <= -1) {
                                         Peers[peer] = new PeerConnection(getRemoteVideo());
@@ -481,6 +485,11 @@ var WebRTCO = function(options) {
         }
     }
     /* end of signaling object */
+
+    // send broadcasting message to all peers via server
+    API.send2Public = function(msg) {
+        Signaling.Send({type: "TO_PUBLIC", value: msg});
+    };
 
     // Return local stream
     API.getLocalStream = function() {
@@ -620,44 +629,48 @@ var WebRTCO_BERT = function() {
 
     // BERT Encoder
 
-    function uc(u1,u2) { if (u1.byteLength == 0) return u2; if (u2.byteLength == 0) return u1; console.error("uc error"); return 0; }
+    function uc(u1,u2) { if (u1.byteLength == 0) return u2; if (u2.byteLength == 0) return u1;
+                         var a = new Uint8Array(u1.byteLength + u2.byteLength);
+                         a.set(u1, 0); a.set(u2, u1.byteLength); return a; };
     function ar(o)     { return o.v instanceof ArrayBuffer ? new Uint8Array(o.v) : o.v instanceof Uint8Array ? o.v :
-                     Array.isArray(o.v) ? new Uint8Array(o.v) : new Uint8Array(utf8_toByteArray(o.v).v);}
+                         Array.isArray(o.v) ? new Uint8Array(o.v) : new Uint8Array(utf8_toByteArray(o.v).v);}
     function fl(a)     { return a.reduce(function(f,t){ return uc(f, t instanceof Uint8Array ? t :
-                     Array.isArray(t) ? fl(t) : new Uint8Array([t]) ); }, new Uint8Array()); }
+                                                                  Array.isArray(t) ? fl(t) : new Uint8Array([t]) ); }, new Uint8Array()); }
     API.atom = function(o)   { return {t:100,v:utf8_toByteArray(o).v}; };
     API.bin = function(o)    { return {t:109,v:o instanceof ArrayBuffer ? new Uint8Array(o) : o instanceof Uint8Array ? o : utf8_toByteArray(o).v}; };
     API.tuple = function()   { return {t:104,v:Array.apply(null,arguments)}; };
     API.list = function()    { return {t:108,v:Array.apply(null,arguments)}; };
     API.number = function(o) { return {t:98,v:o}; };
+
     function enc(o)    { return fl([131,ein(o)]); }
     function ein(o)    { return Array.isArray(o)?en_108({t:108,v:o}):eval('en_'+o.t)(o); }
     function en_undefined(o) { return [106]; }
     function en_98(o)  { return [98,o.v>>>24,(o.v>>>16)&255,(o.v>>>8)&255,o.v&255]; }
     function en_97(o)  { return [97,o.v];}
     function en_106(o) { return [106];}
-    function en_100(o) { return [100,o.v.length>>>8,o.v.length&255,ar(o)];}
+    function en_100(o) { return [100,o.v.length>>>8,o.v.length&255,ar(o)]; }
     function en_107(o) { return [107,o.v.length>>>8,o.v.length&255,ar(o)];}
     function en_104(o) { var l=o.v.length,r=[]; for(var i=0;i<l;i++)r[i]=ein(o.v[i]); return [104,l,r]; }
     function en_109(o) { var l=o.v instanceof ArrayBuffer ? o.v.byteLength : o.v.length;
-                     return[109,l>>>24,(l>>>16)&255,(l>>>8)&255,l&255,ar(o)]; }
+                         return[109,l>>>24,(l>>>16)&255,(l>>>8)&255,l&255,ar(o)]; }
     function en_108(o) { var l=o.v.length,r=[]; for(var i=0;i<l;i++)r.push(ein(o.v[i]));
-                     return o.v.length==0?[106]:[108,l>>>24,(l>>>16)&255,(l>>>8)&255,l&255,r,106]; }
-
+                         return o.v.length==0?[106]:[108,l>>>24,(l>>>16)&255,(l>>>8)&255,l&255,r,106]; }
     // BERT Decoder
 
     function nop(b) { return []; };
-    function int(b) { return b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); };
-    function dec(d) { sx=new DataView(d);ix=0; if(sx.getUint8(ix++)!==131)throw("BERT?"); return din(); };
-    function str(b) { var dv,sz=(b==2?sx.getUint16(ix):sx.getInt32(ix));ix+=b;
-                      var r=sx.buffer.slice(ix,ix+=sz); return b==2?utf8_dec(r):r; };
-    function run(b) { var sz=(b==1?sx.getUint8(ix):sx.getUint32(ix)),r=[]; ix+=b;
-                      for(var i=0;i<sz;i++) r.push(din()); if(b==4)ix++; return r; };
-    function din()  { var c=sx.getUint8(ix++),x; switch(c) { case 97: x=[int,1];break;
-                      case 98:  x=[int,4]; break; case 100: x=[str,2]; break;
-                      case 104: x=[run,1]; break; case 107: x=[str,2]; break;
-                      case 108: x=[run,4]; break; case 109: x=[str,4]; break;
-                      default:  x=[nop,0]; } return {t:c,v:x[0](x[1])};};
+function big(b) { var sk=b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); ix+=sk+1; return []; };
+function int(b) { return b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); };
+function dec(d) { sx=new DataView(d);ix=0; if(sx.getUint8(ix++)!==131)throw("BERT?"); return din(); };
+function str(b) { var dv,sz=(b==2?sx.getUint16(ix):sx.getInt32(ix));ix+=b;
+                  var r=sx.buffer.slice(ix,ix+=sz); return b==2?utf8_dec(r):r; };
+function run(b) { var sz=(b==1?sx.getUint8(ix):sx.getUint32(ix)),r=[]; ix+=b;
+                  for(var i=0;i<sz;i++) r.push(din()); if(b==4)ix++; return r; };
+function din()  { var c=sx.getUint8(ix++),x; switch(c) { case 97: x=[int,1];break;
+                  case 98:  x=[int,4]; break; case 100: x=[str,2]; break;
+                  case 110: x=[big,1]; break; case 111: x=[big,4]; break;
+                  case 104: x=[run,1]; break; case 107: x=[str,2]; break;
+                  case 108: x=[run,4]; break; case 109: x=[str,4]; break;
+                                                       default:  x=[nop,0]; } return {t:c,v:x[0](x[1])};};
 
     API.encode = function(t) {
         return enc(t);
@@ -665,6 +678,11 @@ var WebRTCO_BERT = function() {
 
     API.decode = function(b) {
         return dec(b);
+    };
+
+    // array buffer to string
+    API.ab2str = function(buf) {
+        return String.fromCharCode.apply(null, new Uint8Array(buf));
     };
 
     return API;

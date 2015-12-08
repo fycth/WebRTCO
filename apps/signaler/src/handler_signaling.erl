@@ -31,6 +31,10 @@ websocket_handle(_Any, Req, State) ->
     io:format("Received unexpected message of unknown type ~p~n",[_Any]),
     {ok, Req, State, hibernate}.
 
+websocket_info({broadcast, PidFrom, {public, Message}}, Req, State) ->
+    Resp = term_to_binary({<<"NEW_PUBLIC">>,list_to_binary(pid_to_list(PidFrom)),Message}),
+    {reply, {binary, <<Resp/binary>>}, Req, State, hibernate};
+
 websocket_info({broadcast, PidFrom, newpeer}, Req, State) ->
     Resp = term_to_binary({<<"NEW_PEER">>,list_to_binary(pid_to_list(PidFrom))}),
     {reply, {binary, <<Resp/binary>>}, Req, State, hibernate};
@@ -74,6 +78,10 @@ handle_bin({<<"TO">>,{To,Message}},Req,State) ->
         false ->
             ok
     end,
+    {ok, Req, State, hibernate};
+
+handle_bin({<<"TO_PUBLIC">>,{Message,_}}, Req, State) ->
+    broadcast2room({public,Message}, State#state.room),
     {ok, Req, State, hibernate};
 
 handle_bin(Data,Req,State) ->
