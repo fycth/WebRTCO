@@ -5,27 +5,27 @@
 // Version: 1.12
 
 /*
-   options.localVideoID = string ID of the video tag for showing local video
-   options.remoteVideoID = string ID of the video tag for showing remote video 
-   options.getRemoteVideoID = call back function which is called when we need to get remote video tag ID from the client
-   options.roomID = string word that identifies room parameter in the GET request. If not set, equal to 'room'
-   options.roomName = string that that identifies room name. If not set, room name will be requested from the signaling server
-   options.pc_config
-   options.constraints
-   options.sdp_constraints
-   options.sandbox = if set, don't make calls, just get user media and stop
-   options.own_signaler = URL to the WebRTCO signaler installed on the customer's side
-   options.call_back = it is a function that will be called when we need to notify client on an event (error happened, created room etc.)
-   options.no_data_channel - if set, don't create data channel (created by default)
-   options.hq_audio - if set, enable high-quality audio (stereo, 44100, 256kb/s)
-*/
+ options.localVideoID = string ID of the video tag for showing local video
+ options.remoteVideoID = string ID of the video tag for showing remote video 
+ options.getRemoteVideoID = call back function which is called when we need to get remote video tag ID from the client
+ options.roomID = string word that identifies room parameter in the GET request. If not set, equal to 'room'
+ options.roomName = string that that identifies room name. If not set, room name will be requested from the signaling server
+ options.pc_config
+ options.constraints
+ options.sdp_constraints
+ options.sandbox = if set, don't make calls, just get user media and stop
+ options.own_signaler = URL to the WebRTCO signaler installed on the customer's side
+ options.call_back = it is a function that will be called when we need to notify client on an event (error happened, created room etc.)
+ options.no_data_channel - if set, don't create data channel (created by default)
+ options.hq_audio - if set, enable high-quality audio (stereo, 44100, 256kb/s)
+ */
 
 var WebRTCO = function(options) {
     var API = {};
     var signaling_url = typeof options.own_signaler !== 'undefined' ? options.own_signaler : "wss://www.oslikas.com/WebRTCO-app/signaling/1.12/";
     if (typeof options === 'undefined') {
-	    console.error("You should pass options. Please, refer to the documentation.");
-	    return;
+	      console.error("You should pass options. Please, refer to the documentation.");
+	      return;
     }
     // we store in here set of PeerConnection objects (one per peer)
     var Peers = [];
@@ -36,22 +36,22 @@ var WebRTCO = function(options) {
             },
             optional: []
         },
-	    video: {
-	        mandatory: {
+	      video: {
+	          mandatory: {
                 minWidth: 640,
                 minHeight: 480,
                 maxWidth: 1080,
                 maxHeight: 720
             },
-	        optional: []
-	    }
+	          optional: []
+	      }
     };
     var default_pc_config = {
-	    iceServers: [
-	        {url: 'stun:stun1.l.google.com:19302'},
-	        {url: 'stun:srun2.l.google.com:19302'},
-	        {url: 'stun:stun.l.google.com:19302'}
-	    ]
+	      iceServers: [
+	          {url: 'stun:stun1.l.google.com:19302'},
+	          {url: 'stun:srun2.l.google.com:19302'},
+	          {url: 'stun:stun.l.google.com:19302'}
+	      ]
     };
     var default_sdp_constraints = {
         mandatory: {
@@ -77,7 +77,7 @@ var WebRTCO = function(options) {
         }
     };
     /* end of screencasting constraints */
-    
+
     /* Look at the options and do initialization */
     var pc_config = typeof options.pc_config !== 'undefined' ? options.pc_config : default_pc_config;
     var constraints = typeof options.constraints !== 'undefined' ? options.constraints : default_constraints;
@@ -93,8 +93,8 @@ var WebRTCO = function(options) {
         if (typeof options.getRemoteVideoID !== 'undefined') return options.getRemoteVideoID();
         pushCallBack(ErrorCodes.REMOTE_ID);
         return null;
-    }
-    
+    };
+
     /*
      * Error codes and call back
      */
@@ -123,7 +123,7 @@ var WebRTCO = function(options) {
     API.ErrorCodes = ErrorCodes;
 
     var BERT = new WebRTCO_BERT();
-    
+
     function pushCallback(code, message) {
         if (undefined === call_back) return;
         var msg = {code: code};
@@ -131,30 +131,30 @@ var WebRTCO = function(options) {
         call_back(msg);
     };
     /* end of ErrorCodes */
-    
+
     /*
      * Utilities
-     */    
+     */
     var Utils = (function() {
-	    var API = {};	    
-	    API.getRoomName = function() {
-	        var s = window.location.search;
-	        var o = {};
-	        s.replace(
-		        new RegExp ("([^?=&]+)(=([^&]*))?", "g"),
-		        function ($0, $1, $2, $3) { o[$1] = $3; }
-	        );
-	        if (o[roomID]) return o[roomID];
+	      var API = {};
+	      API.getRoomName = function() {
+	          var s = window.location.search;
+	          var o = {};
+	          s.replace(
+		            new RegExp ("([^?=&]+)(=([^&]*))?", "g"),
+		            function ($0, $1, $2, $3) { o[$1] = $3; }
+	          );
+	          if (o[roomID]) return o[roomID];
             return undefined;
-	    };
+	      };
         API.makeRandID = function(limit) {
             var rand_text = "";
             var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
             for(var i = 0; i < limit; i++)
                 rand_text += possible.charAt(Math.floor(Math.random() * possible.length));
-	        return rand_text;
+	          return rand_text;
         };
-	    return API;
+	      return API;
     }());
     /* end of Utils object */
 
@@ -166,17 +166,17 @@ var WebRTCO = function(options) {
     var PeerConnection = function(remoteVideoID) {
         var API = {};
         var remoteVideo = document.getElementById(remoteVideoID);
-	    var pc_constraints = {};
+	      var pc_constraints = {};
         var peer;
         var pc;
         API.setPeer = function(p) {
             peer = p;
         };
-	    function onIceCandidate(e) {
-	        if (e.candidate) send2peer({type: 'candidate', label: e.candidate.sdpMLineIndex,
-					                   id: e.candidate.sdpMid, candidate: e.candidate.candidate});
-//	        else console.debug("End of candidates");
-	    };
+	      function onIceCandidate(e) {
+	          if (e.candidate) send2peer({type: 'candidate', label: e.candidate.sdpMLineIndex,
+					                              id: e.candidate.sdpMid, candidate: e.candidate.candidate});
+            //	        else console.debug("End of candidates");
+	      };
 
         function send2peer(message) {
             if (typeof options.signaling !== 'undefined') {
@@ -186,40 +186,40 @@ var WebRTCO = function(options) {
             }
         };
 
-	    var onRemoteStreamAdded = function(e) {
-	        //TODO: calling of attachstream should be in media object (a callback?)	        
-	        attachMediaStream(remoteVideo, e.stream);
-//	        console.debug("Remote stream added");
-	    };
+	      var onRemoteStreamAdded = function(e) {
+	          //TODO: calling of attachstream should be in media object (a callback?)
+	          attachMediaStream(remoteVideo, e.stream);
+            //	        console.debug("Remote stream added");
+	      };
 
-	    function onRemoteStreamRemoved(e) {
-//	        console.debug("Remote stream removed");
-	    };
+	      function onRemoteStreamRemoved(e) {
+            //	        console.debug("Remote stream removed");
+	      };
 
-	    API.doCall = function() {
-//	        console.debug("Sending offer to the peer. Constraints: " + JSON.stringify(pc_constraints));
+	      API.doCall = function() {
+            //	        console.debug("Sending offer to the peer. Constraints: " + JSON.stringify(pc_constraints));
             if (typeof options.no_data_channel === 'undefined') createDataChannel();
-	        pc.createOffer(setLocalAndSendMessage, onError, pc_constraints);
-	    };
+	          pc.createOffer(setLocalAndSendMessage, onError, pc_constraints);
+	      };
 
-	    function doAnswer() {
-//	        console.debug("Sending answer to the peer");
-	        pc.createAnswer(setLocalAndSendMessage, onError, sdpConstraints); //TODO: sdpConstraints should be passed here?
-	    };
+	      function doAnswer() {
+            //	        console.debug("Sending answer to the peer");
+	          pc.createAnswer(setLocalAndSendMessage, onError, sdpConstraints); //TODO: sdpConstraints should be passed here?
+	      };
 
-	    function onError(e) {
+	      function onError(e) {
             pushCallback(ErrorCodes.PEER_CONNECTION, e.toString());
-//	        console.debug("Something happened when sending an answer or an offer: " + e.toString());
-	    };
-	    
-	    function setLocalAndSendMessage(sdp) {
+            //	        console.debug("Something happened when sending an answer or an offer: " + e.toString());
+	      };
+
+	      function setLocalAndSendMessage(sdp) {
             if (typeof options.hq_audio !== 'undefined') {
                 sdp.sdp = setSDPBand(sdp.sdp);
                 sdp.sdp = setSDPStereo(sdp.sdp);
             }
-	        pc.setLocalDescription(sdp);
-	        send2peer(sdp);
-	    };
+            pc.setLocalDescription(sdp);
+            send2peer(sdp);
+	      };
 
         function setSDPBand(sdp) {
             //    sdp = sdp.replace( /b=AS([^\r\n]+\r\n)/g , '');
@@ -256,19 +256,19 @@ var WebRTCO = function(options) {
             return sdp;
         }
 
-	    API.onOffer = function(m) {
-	        pc.setRemoteDescription(new RTCSessionDescription(m));
-	        doAnswer();
-	    };
+	      API.onOffer = function(m) {
+	          pc.setRemoteDescription(new RTCSessionDescription(m));
+	          doAnswer();
+	      };
 
-	    API.onAnswer = function(m) {
-	        pc.setRemoteDescription(new RTCSessionDescription(m));
-	    };
+	      API.onAnswer = function(m) {
+	          pc.setRemoteDescription(new RTCSessionDescription(m));
+	      };
 
-	    API.onCandidate = function(m) {
-	        var candidate = new RTCIceCandidate({sdpMLineIndex: m.label, candidate: m.candidate});
-	        pc.addIceCandidate(candidate);
-	    };
+	      API.onCandidate = function(m) {
+	          var candidate = new RTCIceCandidate({sdpMLineIndex: m.label, candidate: m.candidate});
+	          pc.addIceCandidate(candidate);
+	      };
 
         API.addStream = function(stream) {
             pc.addStream(stream);
@@ -287,7 +287,7 @@ var WebRTCO = function(options) {
             } catch (e) {
                 pushCallback(ErrorCodes.DATA_CHANNEL,e);
                 data_channel = null;
-//                console.error("Error creating data channel " + e);
+                //                console.error("Error creating data channel " + e);
                 return;
             }
             initDataChannel();
@@ -301,79 +301,79 @@ var WebRTCO = function(options) {
             if (null !== data_channel) data_channel.send(message);
         };
         function onDataChannelOpen(event) {
-//            console.info("Data channel opened");
-//            send2dataChannel("hello to " + peer + " !");
+            //            console.info("Data channel opened");
+            //            send2dataChannel("hello to " + peer + " !");
         };
         function onDataChannelClose(event) {
             data_channel = null;
-//            console.info("Data channel closed");
+            //            console.info("Data channel closed");
         };
         function onReceiveMessageCallback(event) {
-//            console.info("data message: " + event.data);
+            //            console.info("data message: " + event.data);
         };
         // end of Data Channel
-        
-	    try {
-	        pc = new RTCPeerConnection(pc_config, {});
-	        pc.onicecandidate = onIceCandidate;
-          pc.onaddstream = onRemoteStreamAdded;
-          pc.onremovestream = onRemoteStreamRemoved;
-          pc.ondatachannel = onDataChannel;
-//	        console.debug("Peer connection created");
-	    } catch (e) {
-	        pc = null;
+
+	      try {
+	          pc = new RTCPeerConnection(pc_config, {});
+	          pc.onicecandidate = onIceCandidate;
+            pc.onaddstream = onRemoteStreamAdded;
+            pc.onremovestream = onRemoteStreamRemoved;
+            pc.ondatachannel = onDataChannel;
+            //	        console.debug("Peer connection created");
+	      } catch (e) {
+	          pc = null;
             pushCallback(ErrorCodes.PEER_CONNECTION, e.message);
-//	        console.debug("Failed to create peer connection: " + e.message);
-	    }
+            //	        console.debug("Failed to create peer connection: " + e.message);
+	      }
         return API;
     };
     /* end of peer connection object */
 
     API.Adapter = new WebRTCOAdapter();
     var browserName = API.Adapter.name;
-    
+
     /*
      * WebRTC media object
-     * 
+     *
      * localVideoID - (mandatory) - ID of the video tag
      * _constraints - (optional) - media access constraints
      *
-     */    
+     */
     var WebRTCOMedia = function(localVideoID, _constraints, _stream_callback) {
         var API = {};
-	    var localVideo = document.getElementById(localVideoID);
+	      var localVideo = document.getElementById(localVideoID);
         if (typeof options.hq_audio !== 'undefined' && browserName === 'Chrome') {
             _constraints.audio.mandatory.echoCancellation = false;
             _constraints.audio.mandatory.googEchoCancellation = false;
         }
-	    function doGetUserMedia() {
-	        try {
-//		        console.debug("Requesting access to media...");
-		        getUserMedia(_constraints, onSuccess, onError);
-	        } catch (e) {
+	      function doGetUserMedia() {
+	          try {
+                //		        console.debug("Requesting access to media...");
+		            getUserMedia(_constraints, onSuccess, onError);
+	          } catch (e) {
                 pushCallback(ErrorCodes.MEDIA, e.message);
-//		        console.error("Media access failed with error: " + e.message);
-		        return;
-	        }
-	    };
-	    function onSuccess(stream) {
-//	        console.debug("Media access granted");
+                //		        console.error("Media access failed with error: " + e.message);
+		            return;
+	          }
+	      };
+	      function onSuccess(stream) {
+            //	        console.debug("Media access granted");
             localVideo.muted = true;
-	        _stream_callback(stream);
-	        attachMediaStream(localVideo, stream);
-	    };
-	    function onError(e) {
+	          _stream_callback(stream);
+	          attachMediaStream(localVideo, stream);
+	      };
+	      function onError(e) {
             pushCallback(ErrorCodes.MEDIA, e.toString());
-//	        console.error("Failed to get media access: " + e);
-	    };
-	    doGetUserMedia();
+            //	        console.error("Failed to get media access: " + e);
+	      };
+	      doGetUserMedia();
         return API;
     };
     /* end of media object */
 
     var Media = new WebRTCOMedia(options.localVideoID, constraints, function(stream) { localStream = stream; });
 
-    /* 
+    /*
      * Signaling object
      *
      *
@@ -384,38 +384,38 @@ var WebRTCO = function(options) {
             Signaling = options.signaling;
         } else {
             Signaling = (function() {
-	            var API = {};
-	            var ready = false;
+	              var API = {};
+	              var ready = false;
                 var channel = null;
-        
-	            function onOpened() {
-//	        console.debug("Signaling channel opened");
-	                ready = true;
-	                var room = Utils.getRoomName();
-	                if (room !== undefined) {
-		                initiator = true;
-	                } else {
+
+	              function onOpened() {
+                    //	        console.debug("Signaling channel opened");
+	                  ready = true;
+	                  var room = Utils.getRoomName();
+	                  if (room !== undefined) {
+		                    initiator = true;
+	                  } else {
                         room = Utils.makeRandID(5);
-//                console.debug("Room name: " + room);
-		                initiator = false;
-	                }
+                        //                console.debug("Room name: " + room);
+		                    initiator = false;
+	                  }
                     API.Send({type: 'ROOM_ENTER', value: room + ''});
-	            };
+	              };
 
-	            function onMessage(m) {
-//	        console.debug('S->C: ' + m.data);
-	                processMessage(m.data);
-	            };
+	              function onMessage(m) {
+                    //	        console.debug('S->C: ' + m.data);
+	                  processMessage(m.data);
+	              };
 
-	            function onError(e) {
+	              function onError(e) {
                     pushCallback(ErrorCodes.SIGNALING, e.message);
-//	        console.debug("Error on signaling channel");
-	            };
-            
-	            function onClosed() {
-//	        console.debug("Signaling channel has been closed");
-	                ready = false;
-	            };
+                    //	        console.debug("Error on signaling channel");
+	              };
+
+	              function onClosed() {
+                    //	        console.debug("Signaling channel has been closed");
+	                  ready = false;
+	              };
 
 	              function processMessage(m) {
                     var r = new FileReader();
@@ -423,64 +423,64 @@ var WebRTCO = function(options) {
                         var msg = BERT.decode(r.result);
                         // look at the message type
                         switch (BERT.ab2str(msg.v[0].v)) {
-                            case "ROOM_IS_FULL":
-                                pushCallback(ErrorCodes.ROOM_IS_FULL);
-                                break;
-                            case "ENTERED_ROOM":
-                                var room_url = window.location + "?" + roomID + "=" + BERT.ab2str(msg.v[1].v);
-                                pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
-                                break;
-                            case "NEW_PEER":
-                                var FromPid = BERT.ab2str(msg.v[1].v);
-                                Peers[FromPid] = new PeerConnection(getRemoteVideo());
-                                Peers[FromPid].addStream(localStream);
-                                Peers[FromPid].setPeer(FromPid);
-                                Peers[FromPid].doCall();
-                                break;
-                            case "NEW_PUBLIC":
-                                pushCallback(ErrorCodes.PUBLIC_MESSAGE, {from: BERT.ab2str(msg.v[1].v), msg: BERT.ab2str(msg.v[2].v)});
-                            case "FROM":
-                                var peer = BERT.ab2str(msg.v[1].v);
-                                msg = JSON.parse(BERT.ab2str(msg.v[2].v));
-                                if (msg.type == 'offer') {
-                                    if (Peers.indexOf(peer) <= -1) {
-                                        Peers[peer] = new PeerConnection(getRemoteVideo());
-                                        Peers[peer].addStream(localStream);
-                                        Peers[peer].setPeer(peer);
-                                        Peers[peer].onOffer(msg);
-                                    }
-                                } else if (msg.type == 'answer') {
-                                    Peers[peer].onAnswer(msg);
-                                } else if (msg.type == 'candidate') {
-                                    Peers[peer].onCandidate(msg);
-                                };
-                                break;
-                            default:
-                                break;
+                        case "ROOM_IS_FULL":
+                            pushCallback(ErrorCodes.ROOM_IS_FULL);
+                            break;
+                        case "ENTERED_ROOM":
+                            var room_url = window.location + "?" + roomID + "=" + BERT.ab2str(msg.v[1].v);
+                            pushCallback(ErrorCodes.ENTERED_ROOM, room_url);
+                            break;
+                        case "NEW_PEER":
+                            var FromPid = BERT.ab2str(msg.v[1].v);
+                            Peers[FromPid] = new PeerConnection(getRemoteVideo());
+                            Peers[FromPid].addStream(localStream);
+                            Peers[FromPid].setPeer(FromPid);
+                            Peers[FromPid].doCall();
+                            break;
+                        case "NEW_PUBLIC":
+                            pushCallback(ErrorCodes.PUBLIC_MESSAGE, {from: BERT.ab2str(msg.v[1].v), msg: BERT.ab2str(msg.v[2].v)});
+                        case "FROM":
+                            var peer = BERT.ab2str(msg.v[1].v);
+                            msg = JSON.parse(BERT.ab2str(msg.v[2].v));
+                            if (msg.type == 'offer') {
+                                if (Peers.indexOf(peer) <= -1) {
+                                    Peers[peer] = new PeerConnection(getRemoteVideo());
+                                    Peers[peer].addStream(localStream);
+                                    Peers[peer].setPeer(peer);
+                                    Peers[peer].onOffer(msg);
+                                }
+                            } else if (msg.type == 'answer') {
+                                Peers[peer].onAnswer(msg);
+                            } else if (msg.type == 'candidate') {
+                                Peers[peer].onCandidate(msg);
+                            };
+                            break;
+                        default:
+                            break;
                         };
                     });
                     r.readAsArrayBuffer(m);
-	            };
-	    
-	            API.Send = function(m) {
-	                if (!ready) return;
-	                var s = typeof m.message !== 'undefined' ? JSON.stringify(m.message) : "";
+	              };
+
+	              API.Send = function(m) {
+	                  if (!ready) return;
+	                  var s = typeof m.message !== 'undefined' ? JSON.stringify(m.message) : "";
                     var b = BERT.encode(BERT.tuple(BERT.bin(m.type),BERT.tuple(BERT.bin(m.value),BERT.bin(s))));
-//	        console.debug('C->S: ' + s);
-	                channel.send(b);
-	            };
+                    //	        console.debug('C->S: ' + s);
+	                  channel.send(b);
+	              };
 
                 function init() {
                     if (null !== localStream) {
-	                    channel = new WebSocket(signaling_url);
-	                    channel.onopen = onOpened;
-	                    channel.onerror = onError;
-	                    channel.onmessage = onMessage;
-	                    channel.onclose = onClosed;
+	                      channel = new WebSocket(signaling_url);
+	                      channel.onopen = onOpened;
+	                      channel.onerror = onError;
+	                      channel.onmessage = onMessage;
+	                      channel.onclose = onClosed;
                     } else setTimeout(init, 1000);
                 };
                 init();
-	            return API;
+	              return API;
             }());
         }
     }
@@ -599,7 +599,7 @@ var WebRTCOAdapter = function() {
     }
     return API;
 };
-    /* end of Adapter object */
+/* end of Adapter object */
 
 /*
  * WebRTC BERT Encoder/Decoder
@@ -658,19 +658,19 @@ var WebRTCO_BERT = function() {
     // BERT Decoder
 
     function nop(b) { return []; };
-function big(b) { var sk=b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); ix+=sk+1; return []; };
-function int(b) { return b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); };
-function dec(d) { sx=new DataView(d);ix=0; if(sx.getUint8(ix++)!==131)throw("BERT?"); return din(); };
-function str(b) { var dv,sz=(b==2?sx.getUint16(ix):sx.getInt32(ix));ix+=b;
-                  var r=sx.buffer.slice(ix,ix+=sz); return b==2?utf8_dec(r):r; };
-function run(b) { var sz=(b==1?sx.getUint8(ix):sx.getUint32(ix)),r=[]; ix+=b;
-                  for(var i=0;i<sz;i++) r.push(din()); if(b==4)ix++; return r; };
-function din()  { var c=sx.getUint8(ix++),x; switch(c) { case 97: x=[int,1];break;
-                  case 98:  x=[int,4]; break; case 100: x=[str,2]; break;
-                  case 110: x=[big,1]; break; case 111: x=[big,4]; break;
-                  case 104: x=[run,1]; break; case 107: x=[str,2]; break;
-                  case 108: x=[run,4]; break; case 109: x=[str,4]; break;
-                                                       default:  x=[nop,0]; } return {t:c,v:x[0](x[1])};};
+    function big(b) { var sk=b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); ix+=sk+1; return []; };
+    function int(b) { return b==1?sx.getUint8(ix++):sx.getInt32((a=ix,ix+=4,a)); };
+    function dec(d) { sx=new DataView(d);ix=0; if(sx.getUint8(ix++)!==131)throw("BERT?"); return din(); };
+    function str(b) { var dv,sz=(b==2?sx.getUint16(ix):sx.getInt32(ix));ix+=b;
+                      var r=sx.buffer.slice(ix,ix+=sz); return b==2?utf8_dec(r):r; };
+    function run(b) { var sz=(b==1?sx.getUint8(ix):sx.getUint32(ix)),r=[]; ix+=b;
+                      for(var i=0;i<sz;i++) r.push(din()); if(b==4)ix++; return r; };
+    function din()  { var c=sx.getUint8(ix++),x; switch(c) { case 97: x=[int,1];break;
+                                                           case 98:  x=[int,4]; break; case 100: x=[str,2]; break;
+                                                           case 110: x=[big,1]; break; case 111: x=[big,4]; break;
+                                                           case 104: x=[run,1]; break; case 107: x=[str,2]; break;
+                                                           case 108: x=[run,4]; break; case 109: x=[str,4]; break;
+                                                           default:  x=[nop,0]; } return {t:c,v:x[0](x[1])};};
 
     API.encode = function(t) {
         return enc(t);
